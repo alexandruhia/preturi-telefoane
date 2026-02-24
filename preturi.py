@@ -150,7 +150,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         t_val = str(val) if pd.notna(val) else "-"
         draw.text((margine * 1.5, y_pos), t_label, fill="#333333", font=f_label)
         offset = draw.textlength(t_label, font=f_label)
-        draw.text((margine * 1.5 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
+        draw.text((margine * 2 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
         y_pos += line_spacing
 
     # PREȚ (BLOCAT)
@@ -248,6 +248,7 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf_output = pdf.output(dest='S').encode('latin-1')
     
     st.download_button("💾 DESCARCĂ PDF", pdf_output, "Etichete.pdf", "application/pdf")
+
 
 
 
