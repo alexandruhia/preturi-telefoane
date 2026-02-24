@@ -5,7 +5,7 @@ import io
 import requests
 from fpdf import FPDF
 
-# Configurare pagină pentru vizibilitate maximă
+# Configurare pagină
 st.set_page_config(page_title="ExpressCredit - Multi-Generator Compact", layout="wide")
 
 # --- FUNCȚIE ÎNCĂRCARE DATE ---
@@ -64,8 +64,13 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
     except: pass
     return img
 
-# --- INTERFAȚĂ COMPACTĂ ---
+# --- INTERFAȚĂ ---
 st.title("📱 Multi-Generator ExpressCredit")
+
+# --- BUTON ZOOM GLOBAL ---
+st.sidebar.header("🔍 Vizibilitate Interfață")
+zoom_preview = st.sidebar.slider("Zoom Previzualizare (px)", 150, 600, 300, help="Micsorează sau mărește doar ce vezi pe ecran.")
+
 df = incarca_date()
 
 if df is not None:
@@ -75,28 +80,26 @@ if df is not None:
 
     for i in range(3):
         with cols[i]:
-            # Selecție rapidă (sus)
             brand = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
             modele = df[df['Brand'] == brand]['Model'].dropna().unique()
             model = st.selectbox(f"Model {i+1}", modele, key=f"m_{i}")
             row_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
             
-            # Reglaje ascunse într-un expander pentru a salva spațiu
-            with st.expander(f"⚙️ Ajustează Eticheta {i+1}"):
+            with st.expander(f"⚙️ Reglaje E{i+1}"):
                 f_size = st.slider("Font", 20, 60, 32, key=f"fs_{i}")
                 l_space = st.slider("Rânduri", 20, 80, 40, key=f"ls_{i}")
-                l_sc = st.slider("Logo Scara", 0.1, 1.0, 0.7, key=f"lsc_{i}")
-                l_x = st.number_input("Logo X", 0, 800, 100, key=f"lx_{i}")
-                l_y = st.number_input("Logo Y", 0, 1200, 1080, key=f"ly_{i}")
+                l_sc = st.slider("Logo Scara", 0.1, 1.2, 0.7, key=f"lsc_{i}")
+                l_x = st.number_input("X", 0, 800, 100, key=f"lx_{i}")
+                l_y = st.number_input("Y", 0, 1200, 1080, key=f"ly_{i}")
             
             date_etichete.append(row_data)
             reglaje_etichete.append({'fs': f_size, 'ls': l_space, 'lsc': l_sc, 'lx': l_x, 'ly': l_y})
 
-    # --- GENERARE ȘI PREVIEW ORIZONTAL ---
     st.divider()
-    preview_cols = st.columns(3)
-    imagini_finale = []
 
+    # --- ZONA DE PREVIEW CONTROLATĂ DE ZOOM ---
+    # Generăm imaginile
+    imagini_finale = []
     for i in range(3):
         img = creeaza_imagine_eticheta(
             date_etichete[i], 
@@ -107,31 +110,33 @@ if df is not None:
             reglaje_etichete[i]['ly']
         )
         imagini_finale.append(img)
-        # Afișăm imaginea mai mică (width=250) pentru a vedea totul dintr-o privire
-        preview_cols[i].image(img, use_container_width=True)
+
+    # Afișare cu Zoom Controlat
+    preview_cols = st.columns(3)
+    for i in range(3):
+        # Folosim parametrul width pentru a forța dimensiunea vizuală cerută de slider
+        preview_cols[i].image(imagini_finale[i], width=zoom_preview, caption=f"Eticheta {i+1}")
 
     # --- BUTON PRINT ---
     st.divider()
-    col_btn1, col_btn2, col_btn3 = st.columns([1,2,1])
-    with col_btn2:
-        if st.button("🚀 GENEREAZĂ PDF PENTRU PRINTARE", use_container_width=True):
-            final_w = 800 * 3
-            canvas = Image.new('RGB', (final_w, 1200))
-            for i in range(3):
-                canvas.paste(imagini_finale[i], (i * 800, 0))
+    if st.button("🚀 GENEREAZĂ PDF FINAL (3 ETICHETE)", use_container_width=True):
+        final_w = 800 * 3
+        canvas = Image.new('RGB', (final_w, 1200))
+        for i in range(3):
+            canvas.paste(imagini_finale[i], (i * 800, 0))
 
-            pdf = FPDF(orientation='L', unit='mm', format='A4')
-            pdf.add_page()
-            img_buf = io.BytesIO()
-            canvas.save(img_buf, format='PNG')
-            img_buf.seek(0)
-            with open("temp.png", "wb") as f: f.write(img_buf.read())
-            pdf.image("temp.png", x=5, y=5, w=287)
-            
-            st.download_button(
-                label="💾 DESCARCĂ PDF",
-                data=pdf.output(dest='S').encode('latin-1'),
-                file_name="Etichete_Express.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+        pdf = FPDF(orientation='L', unit='mm', format='A4')
+        pdf.add_page()
+        img_buf = io.BytesIO()
+        canvas.save(img_buf, format='PNG')
+        img_buf.seek(0)
+        with open("temp.png", "wb") as f: f.write(img_buf.read())
+        pdf.image("temp.png", x=5, y=5, w=287)
+        
+        st.download_button(
+            label="💾 DESCARCĂ PDF-ul",
+            data=pdf.output(dest='S').encode('latin-1'),
+            file_name="Etichete_Express.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
