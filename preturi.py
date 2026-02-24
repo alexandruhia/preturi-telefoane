@@ -6,82 +6,153 @@ import requests
 from fpdf import FPDF
 
 # Configurare pagină
-st.set_page_config(page_title="ExpressCredit - Pro Configurator", layout="wide")
+st.set_page_config(page_title="ExpressCredit Pro", layout="wide")
 
-# CSS pentru panou de reglaje GIGANT
+# CSS pentru vizibilitate maximă
 st.markdown("""
     <style>
-    [data-testid="column"] { padding: 5px !important; }
-    .stSlider label, .stSelectbox label, .stNumberInput label, .stTextInput label {
-        font-size: 18px !important;
-        font-weight: 800 !important;
-        color: #000000 !important;
+    .stSlider label, .stSelectbox label, .stTextInput label {
+        font-size: 16px !important;
+        font-weight: bold !important;
     }
-    div.stButton > button { height: 4em; font-weight: bold; background-color: #cc0915; color: white; border-radius: 10px; }
-    .stExpander { border: 2px solid #cc0915 !important; }
+    div.stButton > button { height: 3em; background-color: #cc0915; color: white; width: 100%; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LISTĂ 100 FONTURI ---
-FONT_NAMES = ["Roboto", "Montserrat", "Bebas Neue", "Open Sans", "Lato", "Oswald", "Raleway", "Ubuntu", "Nunito", "Playfair Display", "Dancing Script", "Pacifico", "Caveat", "Satisfy", "Lobster", "Anton", "Questrial", "Sora", "Jost", "Manrope"] # (Restul listei de 100 e implicită prin logica de download)
+# --- LISTĂ FONTURI ---
+FONT_URLS = {
+    "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-",
+    "Montserrat": "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-",
+    "Bebas Neue": "https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-",
+    "Lobster": "https://github.com/google/fonts/raw/main/ofl/lobster/Lobster-",
+    "Anton": "https://github.com/google/fonts/raw/main/ofl/anton/Anton-",
+    "Pacifico": "https://github.com/google/fonts/raw/main/ofl/pacifico/Pacifico-",
+    "Oswald": "https://github.com/google/fonts/raw/main/ofl/oswald/Oswald-",
+    "Caveat": "https://github.com/google/fonts/raw/main/ofl/caveat/Caveat-"
+}
 
-@st.cache_data(show_spinner=False)
-def get_font_bytes(font_name, weight):
-    folders = ['ofl', 'apache', 'googlefonts']
-    clean_name = font_name.lower().replace(" ", "")
-    for folder in folders:
-        url = f"https://github.com/google/fonts/raw/main/{folder}/{clean_name}/{font_name.replace(' ', '')}-{weight}.ttf"
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_font_safe(name, style):
+    base = FONT_URLS.get(name)
+    if base:
         try:
-            r = requests.get(url, timeout=2)
+            r = requests.get(f"{base}{style}.ttf", timeout=2)
             if r.status_code == 200: return r.content
-        except: continue
+        except: pass
     return None
 
-def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style, pret_val, b_val, ag_val, py, ps, ay, asize):
+def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style, pret, b_val, ag_val, py, ps, ay, asize):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
-    margine = 40
-    draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
+    draw.rounded_rectangle([40, 40, 760, 980], radius=60, fill="white")
 
-    f_bytes = get_font_bytes(font_name, font_style)
-    f_bold_bytes = get_font_bytes(font_name, "Bold") or f_bytes
+    # Logica de font cu fallback la DejaVu (standard pe Streamlit Cloud)
+    f_data = get_font_safe(f_name, f_style)
+    f_bold_data = get_font_safe(f_name, "Bold") or f_data
     
     try:
-        if f_bytes:
-            f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), int(font_size * 1.3))
-            f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
-            f_valoare = ImageFont.truetype(io.BytesIO(f_bytes), font_size)
-            f_pret = ImageFont.truetype(io.BytesIO(f_bold_bytes), ps)
-            f_ag = ImageFont.truetype(io.BytesIO(f_bytes), asize)
+        if f_data:
+            f_titlu = ImageFont.truetype(io.BytesIO(f_bold_data), int(f_size * 1.3))
+            f_label = ImageFont.truetype(io.BytesIO(f_bold_data), f_size)
+            f_valoare = ImageFont.truetype(io.BytesIO(f_data), f_size)
+            f_pret = ImageFont.truetype(io.BytesIO(f_bold_data), ps)
+            f_ag = ImageFont.truetype(io.BytesIO(f_data), asize)
         else:
-            path_b = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-            f_titlu = f_label = f_pret = ImageFont.truetype(path_b, font_size)
-            f_valoare = f_ag = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            # Dacă internetul pică, folosim fontul de sistem
+            path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            f_titlu = f_label = f_pret = ImageFont.truetype(path, f_size)
+            f_valoare = f_ag = ImageFont.load_default()
     except:
         f_titlu = f_label = f_valoare = f_pret = f_ag = ImageFont.load_default()
 
     # Model
     txt_m = f"{row['Brand']} {row['Model']}"
     w_m = draw.textlength(txt_m, font=f_titlu)
-    draw.text(((W - w_m) // 2, margine * 3), txt_m, fill=(0, 51, 102), font=f_titlu)
+    draw.text(((W - w_m) // 2, 120), txt_m, fill=(0, 51, 102), font=f_titlu)
 
     # Specificații
-    y_pos = margine * 7.5
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Sanatate baterie", "Capacitate baterie"]
-    for col in specs:
-        if col in row.index:
-            val = str(row[col]) if pd.notna(row[col]) else "-"
-            draw.text((margine * 2, y_pos), f"{col}:", fill="black", font=f_label)
-            offset = draw.textlength(f"{col}: ", font=f_label)
-            draw.text((margine * 2 + offset, y_pos), val, fill="black", font=f_valoare)
-            y_pos += line_spacing
+    y_p = 280
+    for s in specs:
+        if s in row:
+            val = str(row[s]) if pd.notna(row[s]) else "-"
+            draw.text((80, y_p), f"{s}:", fill="black", font=f_label)
+            off = draw.textlength(f"{s}: ", font=f_label)
+            draw.text((80 + off, y_p), val, fill="black", font=f_valoare)
+            y_p += l_space
 
-    # --- PREȚ ---
-    if pret_val:
-        txt_p = f"Pret: {pret_val} lei"
+    # Preț
+    if pret:
+        txt_p = f"Pret: {pret} lei"
         w_p = draw.textlength(txt_p, font=f_pret)
         draw.text(((W - w_p) // 2, py), txt_p, fill=(204, 9, 21), font=f_pret)
 
-    # --- RUBRICA B @ AG ---
+    # B @ Ag
     txt_bag = f"B: {b_val} @ {ag_val}"
+    w_bag = draw.textlength(txt_bag, font=f_ag)
+    draw.text(((W - w_bag) // 2, ay), txt_bag, fill="black", font=f_ag)
+
+    # Logo
+    try:
+        url = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
+        logo = Image.open(io.BytesIO(requests.get(url).content)).convert("RGBA")
+        lw = int(W * l_scale)
+        lh = int(lw * (logo.size[1] / logo.size[0]))
+        logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
+        img.paste(logo, ((W - lw) // 2, l_y), logo)
+    except: pass
+    
+    return img
+
+# --- START APP ---
+try:
+    df = pd.read_excel("https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx")
+except:
+    st.error("⚠️ Nu pot accesa baza de date Excel. Verifică link-ul.")
+    st.stop()
+
+ag_list = [f"Ag{i}" for i in range(1, 53)]
+col_p = st.columns(3)
+final_imgs = []
+
+for i in range(3):
+    with col_p[i]:
+        # Selectare Date
+        b = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].unique()), key=f"b{i}")
+        m = st.selectbox(f"Model {i+1}", df[df['Brand'] == b]['Model'].unique(), key=f"m{i}")
+        row = df[(df['Brand'] == b) & (df['Model'] == m)].iloc[0]
+        
+        # Input-uri noi
+        pr = st.text_input("Preț lei", key=f"p{i}")
+        c1, c2 = st.columns(2)
+        with c1: b_v = st.text_input("B:", key=f"bv{i}")
+        with c2: a_v = st.selectbox("@Ag", ag_list, key=f"av{i}")
+
+        with st.expander("⚙️ Setări Design"):
+            fn = st.selectbox("Font", list(FONT_URLS.keys()), key=f"fn{i}")
+            fs = st.slider("Mărime Text", 10, 80, 25, key=f"fs{i}")
+            ls = st.slider("Spațiu Rânduri", 10, 80, 35, key=f"ls{i}")
+            psize = st.slider("Mărime Preț", 20, 150, 70, key=f"ps{i}")
+            py_pos = st.slider("Y Preț", 600, 950, 820, key=f"py{i}")
+            asize = st.slider("Mărime Agentie", 10, 80, 30, key=f"as{i}")
+            ay_pos = st.slider("Y Agentie", 600, 950, 900, key=f"ay{i}")
+            lsc = st.slider("Logo Scara", 0.1, 1.5, 0.7, key=f"lc{i}")
+            l_y = st.slider("Y Logo", 900, 1150, 1050, key=f"ly{i}")
+
+        # Generare
+        res = creeaza_imagine_eticheta(row, fs, ls, lsc, l_y, fn, "Regular", pr, b_v, a_v, py_pos, psize, ay_pos, asize)
+        st.image(res, use_container_width=True)
+        final_imgs.append(res)
+
+if st.button("🚀 SALVEAZĂ PDF"):
+    canvas = Image.new('RGB', (2400, 1200))
+    for i in range(3): canvas.paste(final_imgs[i], (i * 800, 0))
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.add_page()
+    buf = io.BytesIO()
+    canvas.save(buf, format='PNG')
+    buf.seek(0)
+    with open("temp.png", "wb") as f: f.write(buf.read())
+    pdf.image("temp.png", x=5, y=5, w=287)
+    st.download_button("💾 Download", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf", "application/pdf")
