@@ -25,7 +25,6 @@ st.markdown(f"""
         color: {COLOR_TEXT_GLOBAL} !important;
     }}
     
-    /* Forțare text negru pentru toate elementele */
     h1, h2, h3, p, span, label, div {{
         color: {COLOR_TEXT_GLOBAL} !important;
     }}
@@ -91,7 +90,6 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
     margine = 40
-    # Corpul alb interior
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=90, fill="white")
 
     f_reg_bytes = get_font_bytes(font_name, "Regular")
@@ -116,13 +114,20 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     except:
         f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
-    # Titlu - Centrat
-    txt_m = f"{row['Brand']} {row['Model']}"
-    w_m = draw.textlength(txt_m, font=f_titlu)
-    draw.text(((W - w_m) // 2, margine * 4), txt_m, fill="#000000", font=f_titlu)
+    # TITLU PE DOUĂ RÂNDURI (BRAND ȘI MODEL) - CENTRATE
+    txt_brand = str(row['Brand'])
+    txt_model = str(row['Model'])
+    
+    w_brand = draw.textlength(txt_brand, font=f_titlu)
+    w_model = draw.textlength(txt_model, font=f_titlu)
+    
+    # Rând 1: Brand
+    draw.text(((W - w_brand) // 2, margine * 2.5), txt_brand, fill="#000000", font=f_titlu)
+    # Rând 2: Model (sub Brand, cu o mică spațiere)
+    draw.text(((W - w_model) // 2, margine * 2.5 + titlu_size), txt_model, fill="#000000", font=f_titlu)
 
-    # SPECIFICAȚII - MUTATE LA STÂNGA (margine * 1.5)
-    y_pos = margine * 8.5
+    # SPECIFICAȚII - LA STÂNGA
+    y_pos = margine * 10  # Coborât puțin y_pos pentru a face loc titlului pe 2 rânduri
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Capacitate baterie"]
     for col in specs:
         if col in row.index:
@@ -132,7 +137,6 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
             draw.text((margine * 1.5 + offset, y_pos), val, fill="#000000", font=f_valoare)
             y_pos += line_spacing
 
-    # Baterie - Aliniată tot la stânga
     draw.text((margine * 1.5, y_pos), "Sanatate baterie:", fill="#333333", font=f_label)
     offset_bat = draw.textlength("Sanatate baterie: ", font=f_label)
     draw.text((margine * 1.5 + offset_bat, y_pos), f"{bat_val}%", fill="#000000", font=f_valoare)
@@ -149,7 +153,6 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
         draw.text((start_x + w1, y_base - cifra_size), t2, fill="#000000", font=f_pret_cifra)
         draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill="#000000", font=f_pret_text)
         
-        # B@Ag - Subtil
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
         draw.text((W - margine * 4 - w_bag, y_base + 35), txt_bag, fill="#333333", font=f_bag)
@@ -189,7 +192,6 @@ for i in range(3):
         model = st.selectbox(f"Model", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
         r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
         
-        # Reglaje în două coloane
         c1, c2 = st.columns(2)
         with c1:
             bat_choice = st.selectbox(f"Baterie %", battery_list, key=f"bat_{i}")
