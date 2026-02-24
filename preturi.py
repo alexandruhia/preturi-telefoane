@@ -6,9 +6,9 @@ import requests
 from fpdf import FPDF
 
 # Configurare pagină
-st.set_page_config(page_title="ExpressCredit Pro", layout="wide")
+st.set_page_config(page_title="ExpressCredit Pro - Open Sans Bold", layout="wide")
 
-# CSS pentru aspect curat
+# CSS pentru aspect profesional
 st.markdown("""
     <style>
     .stSlider label, .stSelectbox label, .stTextInput label {
@@ -22,11 +22,10 @@ st.markdown("""
 # --- LISTĂ FONTURI ---
 FONT_URLS = {
     "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-",
+    "Open Sans": "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-",
     "Montserrat": "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-",
     "Bebas Neue": "https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-",
-    "Lobster": "https://github.com/google/fonts/raw/main/ofl/lobster/Lobster-",
     "Anton": "https://github.com/google/fonts/raw/main/ofl/anton/Anton-",
-    "Pacifico": "https://github.com/google/fonts/raw/main/ofl/pacifico/Pacifico-",
     "Oswald": "https://github.com/google/fonts/raw/main/ofl/oswald/Oswald-",
     "Caveat": "https://github.com/google/fonts/raw/main/ofl/caveat/Caveat-"
 }
@@ -36,6 +35,7 @@ def get_font_safe(name, style):
     base = FONT_URLS.get(name)
     if base:
         try:
+            # Încercăm varianta specificată (Regular/Bold/etc)
             r = requests.get(f"{base}{style}.ttf", timeout=2)
             if r.status_code == 200: return r.content
         except: pass
@@ -45,11 +45,14 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
-    # Cardul alb
     draw.rounded_rectangle([40, 40, 760, 980], radius=60, fill="white")
 
+    # Fonturi dinamice pentru specificații și preț
     f_data = get_font_safe(f_name, f_style)
     f_bold_data = get_font_safe(f_name, "Bold") or f_data
+    
+    # --- FONT SPECIAL PENTRU RUBRICA B (Open Sans Bold 30pt) ---
+    open_sans_bold = get_font_safe("Open Sans", "Bold")
     
     try:
         if f_data:
@@ -57,14 +60,18 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
             f_label = ImageFont.truetype(io.BytesIO(f_bold_data), f_size)
             f_valoare = ImageFont.truetype(io.BytesIO(f_data), f_size)
             f_pret = ImageFont.truetype(io.BytesIO(f_bold_data), ps)
-            # MĂRIME FIXĂ 15 pentru rubrica B @ Ag
-            f_standard = ImageFont.truetype(io.BytesIO(f_data), 15)
         else:
             path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
             f_titlu = f_label = f_pret = ImageFont.truetype(path, f_size)
-            f_valoare = f_standard = ImageFont.load_default()
+            f_valoare = ImageFont.load_default()
+
+        # Instanțiere Open Sans Bold 30pt pentru B @ Ag
+        if open_sans_bold:
+            f_b_ag = ImageFont.truetype(io.BytesIO(open_sans_bold), 30)
+        else:
+            f_b_ag = f_label # Fallback dacă Open Sans nu se încarcă
     except:
-        f_titlu = f_label = f_valoare = f_pret = f_standard = ImageFont.load_default()
+        f_titlu = f_label = f_valoare = f_pret = f_b_ag = ImageFont.load_default()
 
     # Model
     txt_m = f"{row['Brand']} {row['Model']}"
@@ -82,17 +89,17 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
             draw.text((80 + off, y_p), val, fill="black", font=f_valoare)
             y_p += l_space
 
-    # Preț (cu reglaj)
+    # Preț
     if pret:
         txt_p = f"Pret: {pret} lei"
         w_p = draw.textlength(txt_p, font=f_pret)
         draw.text(((W - w_p) // 2, py), txt_p, fill=(204, 9, 21), font=f_pret)
 
-    # Rubrica B @ Ag (MĂRIME FIXĂ 15, POZIȚIE FIXĂ)
+    # --- RUBRICA B @ Ag (Fix: Open Sans Bold, 30pt) ---
     txt_bag = f"B: {b_val} @ {ag_val}"
-    w_bag = draw.textlength(txt_bag, font=f_standard)
-    # Plasat fix sub zona de preț, deasupra logo-ului
-    draw.text(((W - w_bag) // 2, 940), txt_bag, fill="gray", font=f_standard)
+    w_bag = draw.textlength(txt_bag, font=f_b_ag)
+    # Poziție fixă deasupra logo-ului
+    draw.text(((W - w_bag) // 2, 920), txt_bag, fill="black", font=f_b_ag)
 
     # Logo
     try:
@@ -106,7 +113,7 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
     
     return img
 
-# --- LOGICĂ APLICAȚIE ---
+# --- INTERFAȚĂ ---
 try:
     df = pd.read_excel("https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx")
 except:
@@ -119,33 +126,29 @@ final_imgs = []
 
 for i in range(3):
     with col_p[i]:
-        # Selectare Date
         b = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].unique()), key=f"b{i}")
         m = st.selectbox(f"Model {i+1}", df[df['Brand'] == b]['Model'].unique(), key=f"m{i}")
         row = df[(df['Brand'] == b) & (df['Model'] == m)].iloc[0]
         
-        # Introducere date etichetă
         pr = st.text_input(f"Preț Telefon {i+1}", key=f"p{i}")
         c1, c2 = st.columns(2)
-        with c1: b_v = st.text_input("B:", key=f"bv{i}", placeholder="ID")
+        with c1: b_v = st.text_input("B:", key=f"bv{i}")
         with c2: a_v = st.selectbox("@Ag", ag_list, key=f"av{i}")
 
         with st.expander("🎨 Ajustări Design"):
-            fn = st.selectbox("Font", list(FONT_URLS.keys()), key=f"fn{i}")
-            fs = st.slider("Mărime Text Spec.", 10, 80, 25, key=f"fs{i}")
+            fn = st.selectbox("Font Spec.", list(FONT_URLS.keys()), index=1, key=f"fn{i}") # Default Open Sans
+            fs = st.slider("Mărime Specificații", 10, 80, 25, key=f"fs{i}")
             ls = st.slider("Spațiu Rânduri", 10, 80, 35, key=f"ls{i}")
             psize = st.slider("Mărime Preț", 20, 150, 70, key=f"ps{i}")
             py_pos = st.slider("Poziție Y Preț", 600, 920, 820, key=f"py{i}")
             lsc = st.slider("Logo Scara", 0.1, 1.5, 0.7, key=f"lc{i}")
-            l_y = st.slider("Poziție Y Logo", 900, 1150, 1050, key=f"ly{i}")
+            l_y = st.slider("Y Logo", 900, 1150, 1050, key=f"ly{i}")
 
-        # Generare
         res = creeaza_imagine_eticheta(row, fs, ls, lsc, l_y, fn, "Regular", pr, b_v, a_v, py_pos, psize)
         st.image(res, use_container_width=True)
         final_imgs.append(res)
 
-st.divider()
-if st.button("🚀 GENEREAZĂ PDF PENTRU PRINT"):
+if st.button("🚀 GENEREAZĂ PDF FINAL"):
     canvas = Image.new('RGB', (2400, 1200))
     for i in range(3): canvas.paste(final_imgs[i], (i * 800, 0))
     pdf = FPDF(orientation='L', unit='mm', format='A4')
@@ -155,4 +158,4 @@ if st.button("🚀 GENEREAZĂ PDF PENTRU PRINT"):
     buf.seek(0)
     with open("temp.png", "wb") as f: f.write(buf.read())
     pdf.image("temp.png", x=5, y=5, w=287)
-    st.download_button("💾 DESCARCĂ PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf", "application/pdf")
+    st.download_button("💾 Descarcă PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf", "application/pdf")
