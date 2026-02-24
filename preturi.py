@@ -10,23 +10,28 @@ from fpdf import FPDF
 # ==========================================
 COLOR_SITE_BG = "#96c83f"      # Verdele pentru fundalul site-ului
 COLOR_ETICHETA_BG = "#cf1f2f"  # Roșul pentru etichetă (print)
-COLOR_TEXT_TITLU = "#1D1D1F"   # Gri închis tipic Apple
-COLOR_TEXT_LABEL = "#6E6E73"   # Gri secundar Apple
+COLOR_TEXT_GLOBAL = "#000000"  # NEGRU TOTAL PENTRU TOT SITE-UL
 
 # Configurare pagină Streamlit
 st.set_page_config(page_title="ExpressCredit - Liquid Edition", layout="wide")
 
 # ==========================================
-# CSS - INTERFAȚĂ APPLE LIQUID MODERN
+# CSS - INTERFAȚĂ APPLE LIQUID CU TEXT NEGRU
 # ==========================================
 st.markdown(f"""
     <style>
-    /* Fundalul principal al site-ului */
+    /* Fundalul principal și forțare culoare text negru peste tot */
     .stApp {{
         background-color: {COLOR_SITE_BG};
+        color: {COLOR_TEXT_GLOBAL} !important;
     }}
     
-    /* Cardurile pentru fiecare etichetă (Efect de sticlă / Glassmorphism) */
+    /* Forțare text negru pentru toate elementele de interfață */
+    h1, h2, h3, p, span, label, div {{
+        color: {COLOR_TEXT_GLOBAL} !important;
+    }}
+
+    /* Cardurile pentru etichete */
     [data-testid="column"] {{
         background: rgba(255, 255, 255, 0.88);
         backdrop-filter: blur(15px);
@@ -37,48 +42,44 @@ st.markdown(f"""
         margin-bottom: 20px;
     }}
 
-    /* Input-uri și Select-uri rotunjite tip Apple */
+    /* Input-uri cu text negru */
     .stTextInput input, .stSelectbox div[data-baseweb="select"], .stNumberInput input {{
         border-radius: 14px !important;
-        border: 1px solid rgba(0,0,0,0.08) !important;
+        border: 1px solid rgba(0,0,0,0.2) !important;
         background-color: white !important;
+        color: {COLOR_TEXT_GLOBAL} !important;
         height: 45px;
     }}
 
-    /* Butonul de Generare PDF */
+    /* Butonul de Generare - Text Negru pe alb/gri deschis pentru contrast */
     div.stButton > button {{
         width: 100%;
-        background: #1D1D1F;
-        color: white;
-        border: none;
+        background: #FFFFFF;
+        color: {COLOR_TEXT_GLOBAL} !important;
+        border: 2px solid {COLOR_TEXT_GLOBAL};
         border-radius: 16px;
         height: 4em;
-        font-weight: 700;
+        font-weight: 800;
         letter-spacing: 0.5px;
         transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }}
     
     div.stButton > button:hover {{
-        background: #000000;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        background: {COLOR_TEXT_GLOBAL};
+        color: #FFFFFF !important;
     }}
 
-    /* Secțiunile expandabile */
+    /* Expander cu text negru */
     .stExpander {{
         border: none !important;
-        background-color: rgba(0,0,0,0.04) !important;
+        background-color: rgba(255,255,255,0.4) !important;
         border-radius: 16px !important;
-        margin-top: 10px;
     }}
-    
-    /* Titluri în coloane */
-    h3 {{
-        font-family: 'SF Pro Display', sans-serif;
-        font-weight: 800 !important;
-        color: #1D1D1F;
-        margin-bottom: 20px !important;
+
+    /* Slidere cu text negru */
+    .stSlider label {{
+        color: {COLOR_TEXT_GLOBAL} !important;
+        font-weight: bold !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -100,12 +101,9 @@ def get_font_bytes(font_name, weight):
 
 def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
     W, H = 800, 1200
-    # FUNDALUL ETICHETEI (ROȘU)
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
     margine = 40
-    
-    # Corpul alb interior (Formă Liquid)
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=90, fill="white")
 
     f_reg_bytes = get_font_bytes(font_name, "Regular")
@@ -133,7 +131,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     # Brand & Model
     txt_m = f"{row['Brand']} {row['Model']}"
     w_m = draw.textlength(txt_m, font=f_titlu)
-    draw.text(((W - w_m) // 2, margine * 4), txt_m, fill=COLOR_TEXT_TITLU, font=f_titlu)
+    draw.text(((W - w_m) // 2, margine * 4), txt_m, fill="#000000", font=f_titlu)
 
     # Specificații
     y_pos = margine * 8.5
@@ -141,17 +139,15 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     for col in specs:
         if col in row.index:
             val = str(row[col]) if pd.notna(row[col]) else "-"
-            draw.text((margine * 3, y_pos), f"{col}:", fill=COLOR_TEXT_LABEL, font=f_label)
+            draw.text((margine * 3, y_pos), f"{col}:", fill="#333333", font=f_label)
             offset = draw.textlength(f"{col}: ", font=f_label)
-            draw.text((margine * 3 + offset, y_pos), val, fill=COLOR_TEXT_TITLU, font=f_valoare)
+            draw.text((margine * 3 + offset, y_pos), val, fill="#000000", font=f_valoare)
             y_pos += line_spacing
 
-    # Baterie
-    draw.text((margine * 3, y_pos), "Sanatate baterie:", fill=COLOR_TEXT_LABEL, font=f_label)
+    draw.text((margine * 3, y_pos), "Sanatate baterie:", fill="#333333", font=f_label)
     offset_bat = draw.textlength("Sanatate baterie: ", font=f_label)
-    draw.text((margine * 3 + offset_bat, y_pos), f"{bat_val}%", fill=COLOR_TEXT_TITLU, font=f_valoare)
+    draw.text((margine * 3 + offset_bat, y_pos), f"{bat_val}%", fill="#000000", font=f_valoare)
 
-    # ZONA PREȚ (Aliniere la bază)
     if pret_val:
         t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
         w1, w2, w3 = draw.textlength(t1, font=f_pret_text), draw.textlength(t2, font=f_pret_cifra), draw.textlength(t3, font=f_pret_text)
@@ -163,12 +159,10 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
         draw.text((start_x + w1, y_base - cifra_size), t2, fill=COLOR_ETICHETA_BG, font=f_pret_cifra)
         draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill=COLOR_ETICHETA_BG, font=f_pret_text)
         
-        # Rubrica mică B@Ag
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text((W - margine * 4 - w_bag, y_base + 35), txt_bag, fill="#AEAEB2", font=f_bag)
+        draw.text((W - margine * 4 - w_bag, y_base + 35), txt_bag, fill="#333333", font=f_bag)
 
-    # Logo (Central sau manual)
     try:
         url_l = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         logo = Image.open(io.BytesIO(requests.get(url_l).content)).convert("RGBA")
@@ -181,20 +175,11 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     return img
 
 # ==========================================
-# LOGICĂ APLICAȚIE & INTERFAȚĂ
+# LOGICĂ APLICAȚIE
 # ==========================================
-@st.cache_data
-def load_data():
-    url = "https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx"
-    return pd.read_excel(url)
+df = pd.read_excel("https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx")
 
-try:
-    df = load_data()
-except:
-    st.error("Eroare la încărcarea datelor!")
-    st.stop()
-
-st.sidebar.markdown(f"### <span style='color:white'>●</span> SETĂRI VIZUALE", unsafe_allow_html=True)
+st.sidebar.markdown(f"### <span style='color:black'>●</span> SETĂRI VIZUALE", unsafe_allow_html=True)
 zoom = st.sidebar.slider("Zoom Previzualizare", 200, 800, 380)
 
 FONT_NAMES = ["Montserrat", "Roboto", "Inter", "Poppins", "Anton"]
@@ -207,21 +192,20 @@ final_imgs = []
 for i in range(3):
     with col_main[i]:
         st.markdown(f"### 📱 Eticheta {i+1}")
-        brand = st.selectbox(f"Selectează Brand", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
-        model = st.selectbox(f"Selectează Model", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
+        brand = st.selectbox(f"Brand", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
+        model = st.selectbox(f"Model", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
         r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
         
-        # Reglaje în două coloane deasupra imaginii
         c1, c2 = st.columns(2)
         with c1:
             bat_choice = st.selectbox(f"Baterie %", battery_list, key=f"bat_{i}")
-            b_input = st.text_input(f"Cod B", key=f"bt_{i}", placeholder="ex: 101")
+            b_input = st.text_input(f"Cod B", key=f"bt_{i}")
             t_size = st.number_input("Mărime Titlu", 10, 150, 48, key=f"tsz_{i}")
             f_size = st.number_input("Mărime Spec.", 10, 100, 28, key=f"sz_{i}")
         with c2:
-            pret_input = st.text_input(f"Preț Lei", key=f"pr_{i}", placeholder="ex: 5200")
+            pret_input = st.text_input(f"Preț Lei", key=f"pr_{i}")
             ag_input = st.selectbox(f"Valoare Ag", ag_list, key=f"ag_{i}")
-            fn = st.selectbox("Stil Font", FONT_NAMES, key=f"fn_{i}")
+            fn = st.selectbox("Font", FONT_NAMES, key=f"fn_{i}")
             c_size = st.number_input("Cifră Preț", 20, 300, 95, key=f"csz_{i}")
 
         with st.expander("🛠️ POZIȚIONARE & LOGO"):
@@ -229,33 +213,25 @@ for i in range(3):
             with e1:
                 p_y = st.slider("Înălțime Preț", 400, 1150, 850, key=f"py_{i}")
                 p_size = st.slider("Mărime 'Pret:'", 20, 150, 55, key=f"psz_{i}")
-                sp = st.slider("Spațiere Spec.", 10, 100, 42, key=f"sp_{i}")
+                sp = st.slider("Spațiere", 10, 100, 42, key=f"sp_{i}")
             with e2:
                 ls = st.slider("Scară Logo", 0.1, 2.0, 0.6, key=f"ls_{i}")
-                lx = st.number_input("X Logo (100=C)", 0, 800, 100, key=f"lx_{i}")
+                lx = st.number_input("X Logo", 0, 800, 100, key=f"lx_{i}")
                 ly = st.number_input("Y Logo", 0, 1200, 1060, key=f"ly_{i}")
 
-        # Generare și afișare Previzualizare
         current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, ls, lx, ly, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
-# Buton Final de Generare PDF
 st.markdown("---")
-if st.button("🚀 GENEREAZĂ PDF FINAL PENTRU PRINT"):
-    # Creăm un canvas mare pentru formatul A4 (3 etichete pe pagină)
+if st.button("🚀 GENEREAZĂ PDF FINAL"):
     canvas = Image.new('RGB', (2400, 1200))
     for i in range(3): canvas.paste(final_imgs[i], (i * 800, 0))
-    
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
-    
     buf = io.BytesIO()
     canvas.save(buf, format='PNG')
     buf.seek(0)
-    
-    # Salvăm temporar pentru PDF
     with open("temp_print.png", "wb") as f: f.write(buf.read())
-    pdf.image("temp_print.png", x=5, y=5, w=287) # Ajustat pentru margini A4
-    
-    st.download_button("💾 DESCARCĂ PDF ACUM", pdf.output(dest='S').encode('latin-1'), "Etichete_Express_Liquid.pdf", "application/pdf")
+    pdf.image("temp_print.png", x=5, y=5, w=287)
+    st.download_button("💾 DESCARCĂ PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf", "application/pdf")
