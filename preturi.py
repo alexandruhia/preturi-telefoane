@@ -55,19 +55,20 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     margine = 40
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
 
-    # Incarcare fonturi: Bold pentru label, Regular pentru valori
-    f_reg_bytes = get_font_bytes(font_name, "Regular")
-    f_bold_bytes = get_font_bytes(font_name, "Bold") or f_reg_bytes
+    f_bytes = get_font_bytes(font_name, font_style)
+    f_bold_bytes = get_font_bytes(font_name, "Bold") or f_bytes
     
     try:
-        if f_reg_bytes:
+        if f_bytes:
             f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), int(font_size * 1.3))
             f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
-            f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
+            f_valoare = ImageFont.truetype(io.BytesIO(f_bytes), font_size)
             f_pret = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
             f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40)
         else:
-            f_titlu = f_label = f_valoare = f_pret = f_bag = ImageFont.load_default()
+            path_b = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            f_titlu = f_label = f_pret = f_bag = ImageFont.truetype(path_b, font_size)
+            f_valoare = ImageFont.load_default()
     except:
         f_titlu = f_label = f_valoare = f_pret = f_bag = ImageFont.load_default()
 
@@ -76,7 +77,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     w_m = draw.textlength(txt_m, font=f_titlu)
     draw.text(((W - w_m) // 2, margine * 3), txt_m, fill=(0, 51, 102), font=f_titlu)
 
-    # Specificații automate din Excel
+    # Specificații
     y_pos = margine * 7.5
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Capacitate baterie"]
     
@@ -88,12 +89,11 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             draw.text((margine * 2 + offset, y_pos), val, fill="black", font=f_valoare)
             y_pos += line_spacing
 
-    # Sănătate Baterie - Adăugat manual, stilizat identic cu restul specificațiilor
+    # Adăugare manuală Sănătate Baterie
     if baterie_manual:
-        label_bat = "Sanatate baterie:"
-        draw.text((margine * 2, y_pos), label_bat, fill="black", font=f_label)
-        offset_bat = draw.textlength(f"{label_bat} ", font=f_label)
-        draw.text((margine * 2 + offset_bat, y_pos), str(baterie_manual), fill="black", font=f_valoare)
+        draw.text((margine * 2, y_pos), "Sanatate baterie:", fill="black", font=f_label)
+        offset = draw.textlength("Sanatate baterie: ", font=f_label)
+        draw.text((margine * 2 + offset, y_pos), baterie_manual, fill="black", font=f_valoare)
         y_pos += line_spacing
 
     # --- TEXT PREȚ ---
@@ -153,8 +153,7 @@ for i in range(3):
 
         with st.expander("⚙️ CONFIGURARE AVANSATĂ", expanded=False):
             fn = st.selectbox("ALEGE FONT", FONT_NAMES, key=f"fn_{i}")
-            # fst (Stil Text) este pastrat pentru titlu, dar specificatiile urmeaza regula ceruta
-            fst = st.selectbox("STIL TEXT TITLU", ["Regular", "Bold", "Italic"], key=f"fst_{i}")
+            fs = st.selectbox("STIL TEXT", ["Regular", "Bold", "Italic"], key=f"fst_{i}")
             size = st.slider("MĂRIME FONT SPEC.", 10, 100, 30, key=f"sz_{i}")
             sp = st.slider("SPAȚIERE RÂNDURI", 10, 100, 38, key=f"sp_{i}")
             
@@ -167,8 +166,7 @@ for i in range(3):
             lx = st.number_input("X Logo (100=Centrat)", 0, 800, 100, key=f"lx_{i}")
             ly = st.number_input("Y Logo", 0, 1200, 1050, key=f"ly_{i}")
 
-        # Aplicăm setările: Sanatate baterie va fi Regular, la fel ca celelalte valori
-        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, "Regular", pret_input, p_y, p_size, b_input, ag_input, bat_manual)
+        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, fs, pret_input, p_y, p_size, b_input, ag_input, bat_manual)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
