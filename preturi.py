@@ -5,8 +5,8 @@ import io
 import requests
 from fpdf import FPDF
 
-# Configurare pagină
-st.set_page_config(page_title="ExpressCredit - Multi-Generator Individual", layout="wide")
+# Configurare pagină pentru vizibilitate maximă
+st.set_page_config(page_title="ExpressCredit - Multi-Generator Compact", layout="wide")
 
 # --- FUNCȚIE ÎNCĂRCARE DATE ---
 @st.cache_data(ttl=60)
@@ -21,7 +21,7 @@ def incarca_date():
         st.error(f"Eroare la încărcarea datelor: {e}")
         return None
 
-# --- FUNCȚIE GENERARE ETICHETĂ INDIVIDUALĂ ---
+# --- FUNCȚIE GENERARE ETICHETĂ ---
 def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
     W, H = 800, 1200
     rosu_express = (204, 9, 21)
@@ -33,7 +33,6 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
 
     try:
-        # Fonturi standard Streamlit Cloud
         f_path_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         f_path_reg = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         f_titlu = ImageFont.truetype(f_path_bold, int(font_size * 1.2))
@@ -65,46 +64,39 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
     except: pass
     return img
 
-# --- INTERFAȚĂ ---
-st.title("📱 ExpressCredit - Control Individual pe Etichetă")
+# --- INTERFAȚĂ COMPACTĂ ---
+st.title("📱 Multi-Generator ExpressCredit")
 df = incarca_date()
 
 if df is not None:
-    # Selecție și reglaje pe 3 coloane
     cols = st.columns(3)
     date_etichete = []
     reglaje_etichete = []
 
     for i in range(3):
         with cols[i]:
-            st.markdown(f"### 🏷️ Eticheta {i+1}")
-            
-            # 1. Selecție Date
-            brand = st.selectbox(f"Brand {i+1}:", sorted(df['Brand'].dropna().unique()), key=f"brand_{i}")
+            # Selecție rapidă (sus)
+            brand = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
             modele = df[df['Brand'] == brand]['Model'].dropna().unique()
-            model = st.selectbox(f"Model {i+1}:", modele, key=f"model_{i}")
+            model = st.selectbox(f"Model {i+1}", modele, key=f"m_{i}")
             row_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
             
-            st.divider()
-            st.write("🔧 **Reglaje Eticheta**")
+            # Reglaje ascunse într-un expander pentru a salva spațiu
+            with st.expander(f"⚙️ Ajustează Eticheta {i+1}"):
+                f_size = st.slider("Font", 20, 60, 32, key=f"fs_{i}")
+                l_space = st.slider("Rânduri", 20, 80, 40, key=f"ls_{i}")
+                l_sc = st.slider("Logo Scara", 0.1, 1.0, 0.7, key=f"lsc_{i}")
+                l_x = st.number_input("Logo X", 0, 800, 100, key=f"lx_{i}")
+                l_y = st.number_input("Logo Y", 0, 1200, 1080, key=f"ly_{i}")
             
-            # 2. Slidere Individuale
-            f_size = st.slider("Mărime Font", 20, 60, 35, key=f"fs_{i}")
-            l_space = st.slider("Distanță Rânduri", 20, 100, 45, key=f"ls_{i}")
-            l_sc = st.slider("Mărime Logo", 0.1, 1.0, 0.7, key=f"lsc_{i}")
-            l_x = st.slider("Poziție Logo X", 0, 800, 100, key=f"lx_{i}")
-            l_y = st.slider("Poziție Logo Y", 0, 1200, 1080, key=f"ly_{i}")
-            
-            # Salvăm datele și reglajele pentru generare
             date_etichete.append(row_data)
-            reglaje_etichete.append({
-                'fs': f_size, 'ls': l_space, 'lsc': l_sc, 'lx': l_x, 'ly': l_y
-            })
+            reglaje_etichete.append({'fs': f_size, 'ls': l_space, 'lsc': l_sc, 'lx': l_x, 'ly': l_y})
 
+    # --- GENERARE ȘI PREVIEW ORIZONTAL ---
     st.divider()
-
-    # --- GENERARE PREVIEW ---
+    preview_cols = st.columns(3)
     imagini_finale = []
+
     for i in range(3):
         img = creeaza_imagine_eticheta(
             date_etichete[i], 
@@ -115,40 +107,31 @@ if df is not None:
             reglaje_etichete[i]['ly']
         )
         imagini_finale.append(img)
+        # Afișăm imaginea mai mică (width=250) pentru a vedea totul dintr-o privire
+        preview_cols[i].image(img, use_container_width=True)
 
-    # Afișare imagini rezultate sub reglaje
-    preview_cols = st.columns(3)
-    for i in range(3):
-        preview_cols[i].image(imagini_finale[i], caption=f"Previzualizare {i+1}", use_container_width=True)
-
-    # --- BUTON DESCARCĂ PDF ---
+    # --- BUTON PRINT ---
     st.divider()
-    if st.button("🚀 GENEREAZĂ PDF FINAL (TOATE 3)"):
-        # Lipim cele 3 imagini
-        final_w = 800 * 3
-        final_h = 1200
-        canvas = Image.new('RGB', (final_w, final_h))
-        for i in range(3):
-            canvas.paste(imagini_finale[i], (i * 800, 0))
+    col_btn1, col_btn2, col_btn3 = st.columns([1,2,1])
+    with col_btn2:
+        if st.button("🚀 GENEREAZĂ PDF PENTRU PRINTARE", use_container_width=True):
+            final_w = 800 * 3
+            canvas = Image.new('RGB', (final_w, 1200))
+            for i in range(3):
+                canvas.paste(imagini_finale[i], (i * 800, 0))
 
-        # Creare PDF
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        pdf.add_page()
-        
-        img_buf = io.BytesIO()
-        canvas.save(img_buf, format='PNG')
-        img_buf.seek(0)
-        
-        # Salvăm un fișier temporar pentru FPDF
-        with open("print_multi.png", "wb") as f:
-            f.write(img_buf.read())
-        
-        pdf.image("print_multi.png", x=5, y=5, w=287)
-        
-        pdf_out = pdf.output(dest='S').encode('latin-1')
-        st.download_button(
-            label="💾 DESCARCĂ PDF PENTRU PRINT",
-            data=pdf_out,
-            file_name="Set_3_Etichete.pdf",
-            mime="application/pdf"
-        )
+            pdf = FPDF(orientation='L', unit='mm', format='A4')
+            pdf.add_page()
+            img_buf = io.BytesIO()
+            canvas.save(img_buf, format='PNG')
+            img_buf.seek(0)
+            with open("temp.png", "wb") as f: f.write(img_buf.read())
+            pdf.image("temp.png", x=5, y=5, w=287)
+            
+            st.download_button(
+                label="💾 DESCARCĂ PDF",
+                data=pdf.output(dest='S').encode('latin-1'),
+                file_name="Etichete_Express.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
