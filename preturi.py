@@ -37,7 +37,7 @@ def incarca_date():
         st.error(f"Eroare la baza de date: {e}")
         return None
 
-# --- FUNCȚIE GENERARE ETICHETĂ (CU CENTRARE) ---
+# --- FUNCȚIE GENERARE ETICHETĂ (FĂRĂ FISA TEHNICA + CENTRARE) ---
 def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y):
     W, H = 800, 1200
     rosu_express = (204, 9, 21)
@@ -46,30 +46,27 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     draw = ImageDraw.Draw(img)
     margine = 40
     
-    # Desenare card alb central
+    # Card alb central
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
 
     try:
         f_path_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         f_path_reg = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        f_titlu = ImageFont.truetype(f_path_bold, int(font_size * 1.2))
+        f_titlu = ImageFont.truetype(f_path_bold, int(font_size * 1.3)) # Titlu model puțin mai mare
         f_bold = ImageFont.truetype(f_path_bold, font_size)
         f_normal = ImageFont.truetype(f_path_reg, font_size)
     except:
         f_titlu = f_bold = f_normal = ImageFont.load_default()
 
-    # --- CENTRARE TITLURI ---
-    txt1 = "FISA TEHNICA:"
-    txt2 = f"{row['Brand']} {row['Model']}"
+    # --- CENTRARE NUME MODEL (Singur în partea de sus) ---
+    txt_model = f"{row['Brand']} {row['Model']}"
+    w_tm = draw.textlength(txt_model, font=f_titlu)
     
-    w_t1 = draw.textlength(txt1, font=f_titlu)
-    w_t2 = draw.textlength(txt2, font=f_titlu)
-    
-    draw.text(((W - w_t1) // 2, margine * 2.5), txt1, fill=albastru_text, font=f_titlu)
-    draw.text(((W - w_t2) // 2, margine * 2.5 + 70), txt2, fill=albastru_text, font=f_titlu)
+    # Poziționăm modelul mai jos de marginea de sus pentru echilibru
+    draw.text(((W - w_tm) // 2, margine * 3.5), txt_model, fill=albastru_text, font=f_titlu)
 
-    # --- SPECIFICAȚII (Aliniate la stânga în interiorul blocului central) ---
-    y_pos = margine * 6.5
+    # --- SPECIFICAȚII ---
+    y_pos = margine * 7.0 # Coborâm puțin startul specificațiilor
     specs = [
         "Display", "OS", "Procesor", "Stocare", "RAM", 
         "Camera principala", "Selfie", "Sanatate baterie", "Capacitate baterie"
@@ -78,7 +75,6 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     for col in specs:
         if col in row.index:
             val = str(row[col]) if pd.notna(row[col]) else "-"
-            # Păstrăm un padding mic la stânga (margine * 2)
             draw.text((margine * 2, y_pos), f"{col}:", fill="black", font=f_bold)
             offset = draw.textlength(f"{col}: ", font=f_bold)
             draw.text((margine * 2 + offset, y_pos), val, fill="black", font=f_normal)
@@ -86,6 +82,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
 
     # --- CENTRARE LOGO ---
     try:
+        # Folosim logo-ul alb
         url_logo = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         logo_res = requests.get(url_logo)
         logo = Image.open(io.BytesIO(logo_res.content)).convert("RGBA")
@@ -94,7 +91,6 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
         
-        # Dacă X este lăsat la 100 (default), centrăm automat. Altfel, mutăm manual.
         x_final = (W - lw) // 2 if l_x_manual == 100 else l_x_manual
         img.paste(logo, (x_final, l_y), logo)
     except:
@@ -102,14 +98,13 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
         
     return img
 
-# --- INTERFAȚĂ UTILIZATOR ---
+# --- INTERFAȚĂ ---
 df = incarca_date()
 
 if df is not None:
     st.sidebar.header("🔍 Vizibilitate")
     zoom_preview = st.sidebar.slider("Zoom Previzualizare (px)", 100, 600, 320)
 
-    # 3 Coloane pentru 3 etichete simultane
     col1, col2, col3 = st.columns(3)
     cols = [col1, col2, col3]
     
@@ -118,55 +113,15 @@ if df is not None:
 
     for i in range(3):
         with cols[i]:
-            # Selectoare fără label-uri
-            b_list = sorted(df['Brand'].dropna().unique())
-            brand = st.selectbox(f"B{i}", b_list, key=f"b_{i}")
-            
-            m_list = df[df['Brand'] == brand]['Model'].dropna().unique()
-            model = st.selectbox(f"M{i}", m_list, key=f"m_{i}")
-            
+            brand = st.selectbox(f"B{i}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
+            model = st.selectbox(f"M{i}", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
             row_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
             
-            with st.expander("⚙️ Ajustări"):
+            with st.expander("⚙️"):
                 fs = st.slider("Font", 15, 45, 25, key=f"fs_{i}")
                 ls = st.slider("Spațiu", 15, 60, 32, key=f"ls_{i}")
                 sc = st.slider("Logo", 0.1, 1.2, 0.7, key=f"lsc_{i}")
-                lx = st.number_input("X (100=Centrat)", 0, 800, 100, key=f"lx_{i}")
+                lx = st.number_input("X (100=Centru)", 0, 800, 100, key=f"lx_{i}")
                 ly = st.number_input("Y", 0, 1200, 1080, key=f"ly_{i}")
             
-            date_etichete.append(row_data)
-            reglaje_etichete.append({'fs': fs, 'ls': ls, 'lsc': sc, 'lx': lx, 'ly': ly})
-
-            # Generare și Afișare Lipită
-            img_res = creeaza_imagine_eticheta(row_data, fs, ls, sc, lx, ly)
-            st.image(img_res, width=zoom_preview)
-            reglaje_etichete[i]['img'] = img_res
-
-    # --- BUTON PRINT PDF ---
-    st.divider()
-    if st.button("🚀 GENEREAZĂ PDF FINAL (TOATE 3)"):
-        # Unim cele 3 etichete într-o imagine mare (2400x1200)
-        final_canvas = Image.new('RGB', (2400, 1200))
-        for i in range(3):
-            final_canvas.paste(reglaje_etichete[i]['img'], (i * 800, 0))
-
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        pdf.add_page()
-        
-        # Buffer pentru imaginea unită
-        buf = io.BytesIO()
-        final_canvas.save(buf, format='PNG')
-        buf.seek(0)
-        
-        with open("temp_print.png", "wb") as f:
-            f.write(buf.read())
-        
-        # Plasare pe A4 Landscape
-        pdf.image("temp_print.png", x=5, y=5, w=287)
-        
-        st.download_button(
-            label="💾 DESCARCĂ PDF",
-            data=pdf.output(dest='S').encode('latin-1'),
-            file_name="Etichete_ExpressCredit.pdf",
-            mime="application/pdf"
-        )
+            date_etichete.append(
