@@ -8,7 +8,7 @@ from fpdf import FPDF
 # Configurare pagină
 st.set_page_config(page_title="ExpressCredit - Mega Font System", layout="wide")
 
-# CSS pentru panou de reglaje GIGANT
+# CSS pentru panou de reglaje
 st.markdown("""
     <style>
     [data-testid="column"] { padding: 5px !important; }
@@ -22,20 +22,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- LISTĂ 100 FONTURI GOOGLE ---
-FONT_NAMES = [
-    "Roboto", "Open Sans", "Montserrat", "Lato", "Oswald", "Raleway", "Ubuntu", "Nunito", "Playfair Display", "Merriweather",
-    "Bebas Neue", "Lora", "Kanit", "Fira Sans", "Quicksand", "Anton", "Josefin Sans", "Libre Baskerville", "Arvo", "Archivo",
-    "Poppins", "Inter", "Source Sans Pro", "Dancing Script", "Pacifico", "Caveat", "Satisfy", "Lobster", "Abril Fatface", "Righteous",
-    "Patua One", "Permanent Marker", "Shadows Into Light", "Amatic SC", "Cinzel", "Exo 2", "Orbitron", "Questrial", "Saira", "Teko",
-    "Fjalla One", "Courgette", "Great Vibes", "Kaushan Script", "Yellowtail", "Bree Serif", "Alfa Slab One", "Crete Round", "Domine", "Old Standard TT",
-    "Vollkorn", "Cardo", "Gelasio", "Crimson Text", "Philosopher", "Tinos", "Signika", "Asap", "Assistant", "Muli",
-    "Catamaran", "Work Sans", "Dosis", "Titillium Web", "PT Sans Narrow", "Inconsolata", "Bitter", "Play", "Alegreya", "Chivo",
-    "Rubik", "Mukta", "Hind", "Nanum Gothic", "Heebo", "Karla", "Spectral", "Zilla Slab", "Prata", "EB Garamond",
-    "Cormorant", "Prompt", "Monda", "Rajdhani", "Jost", "Manrope", "Outfit", "Space Grotesk", "Sora", "Public Sans",
-    "Syne", "Fraunces", "Biorhyme", "Space Mono", "JetBrains Mono", "Special Elite", "Bangers", "Luckiest Guy", "Press Start 2P", "Monoton"
-]
-
 @st.cache_data(show_spinner=False)
 def get_font_bytes(font_name, weight):
     folders = ['ofl', 'apache', 'googlefonts']
@@ -48,7 +34,7 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
+def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
@@ -63,7 +49,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), int(font_size * 1.3))
             f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
             f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
-            f_pret_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
+            f_pret_text = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
             f_pret_cifra = ImageFont.truetype(io.BytesIO(f_bold_bytes), cifra_size)
             f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40)
         else:
@@ -71,11 +57,11 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             f_titlu = ImageFont.truetype(path, int(font_size * 1.3))
             f_label = ImageFont.truetype(path, font_size)
             f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-            f_pret_label = ImageFont.truetype(path, pret_size)
+            f_pret_text = ImageFont.truetype(path, pret_size)
             f_pret_cifra = ImageFont.truetype(path, cifra_size)
             f_bag = ImageFont.truetype(path, 40)
     except:
-        f_titlu = f_label = f_valoare = f_pret_label = f_pret_cifra = f_bag = ImageFont.load_default()
+        f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
     # Model
     txt_m = f"{row['Brand']} {row['Model']}"
@@ -99,23 +85,24 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     offset_bat = draw.textlength(f"{label_bat} ", font=f_label)
     draw.text((margine * 2 + offset_bat, y_pos), f"{bat_val}%", fill="black", font=f_valoare)
 
-    # --- TEXT PREȚ (DOUĂ REGLAJE) ---
+    # --- ZONA PREȚ (3 ELEMENTE) ---
     if pret_val:
-        txt_label = "Pret: "
-        txt_cifra = f"{pret_val} lei"
+        t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
+        w1 = draw.textlength(t1, font=f_pret_text)
+        w2 = draw.textlength(t2, font=f_pret_cifra)
+        w3 = draw.textlength(t3, font=f_pret_text)
         
-        w_label = draw.textlength(txt_label, font=f_pret_label)
-        w_cifra = draw.textlength(txt_cifra, font=f_pret_cifra)
-        total_w = w_label + w_cifra
-        
+        total_w = w1 + w2 + w3
         start_x = (W - total_w) // 2
-        # Desenăm "Pret: "
-        draw.text((start_x, pret_y), txt_label, fill=(204, 9, 21), font=f_pret_label)
-        # Desenăm cifra (cu mărimea ei separată)
-        # Ajustăm y-ul cifrei pentru a fi aliniată la bază cu textul
-        draw.text((start_x + w_label, pret_y - (cifra_size - pret_size)//1.5), txt_cifra, fill=(204, 9, 21), font=f_pret_cifra)
         
-        # --- RUBRICA B@Ag ---
+        # Aliniere verticală la bază pentru textul "Pret:" și "lei" față de cifra mai mare
+        y_offset_text = pret_y + (cifra_size - pret_size) * 0.15 
+        
+        draw.text((start_x, y_offset_text), t1, fill=(204, 9, 21), font=f_pret_text)
+        draw.text((start_x + w1, pret_y), t2, fill=(204, 9, 21), font=f_pret_cifra)
+        draw.text((start_x + w1 + w2, y_offset_text), t3, fill=(204, 9, 21), font=f_pret_text)
+        
+        # Rubrica B@Ag
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
         draw.text((W - margine * 2 - w_bag, pret_y + max(pret_size, cifra_size) + 10), txt_bag, fill="black", font=f_bag)
@@ -143,6 +130,8 @@ df = load_data()
 st.sidebar.header("🔍 CONTROL VIZUAL")
 zoom = st.sidebar.slider("Lățime Previzualizare", 200, 1000, 400)
 
+FONT_NAMES = ["Roboto", "Montserrat", "Open Sans", "Lato", "Oswald", "Raleway", "Ubuntu", "Poppins"]
+
 col1, col2, col3 = st.columns(3)
 cols = [col1, col2, col3]
 final_imgs = []
@@ -167,12 +156,12 @@ for i in range(3):
 
         with st.expander("⚙️ CONFIGURARE AVANSATĂ", expanded=False):
             fn = st.selectbox("FONT", FONT_NAMES, key=f"fn_{i}")
-            size = st.slider("FONT SPEC.", 10, 150, 30, key=f"sz_{i}")
-            sp = st.slider("SPAȚIERE", 10, 150, 38, key=f"sp_{i}")
+            size = st.slider("FONT SPEC.", 10, 100, 30, key=f"sz_{i}")
+            sp = st.slider("SPAȚIERE", 10, 100, 38, key=f"sp_{i}")
             
             st.markdown("---")
-            p_size = st.slider("MĂRIME TEXT 'PRET:'", 20, 150, 60, key=f"psz_{i}")
-            c_size = st.slider("MĂRIME CIFRĂ PREȚ", 20, 250, 80, key=f"csz_{i}") # Slider nou adaugat aici
+            p_size = st.slider("MĂRIME TEXT (Pret/lei)", 20, 150, 60, key=f"psz_{i}")
+            c_size = st.slider("MĂRIME CIFRE PREȚ", 20, 250, 80, key=f"csz_{i}")
             p_y = st.slider("POZIȚIE Y PREȚ", 400, 1150, 850, key=f"py_{i}")
             
             st.markdown("---")
@@ -180,7 +169,7 @@ for i in range(3):
             lx = st.number_input("X Logo", 0, 800, 100, key=f"lx_{i}")
             ly = st.number_input("Y Logo", 0, 1200, 1050, key=f"ly_{i}")
 
-        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, "Bold", pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
+        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
