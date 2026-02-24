@@ -170,7 +170,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         
         x_logo = (W - lw) // 2
         # POZIȚIE RIDICATĂ: 960 (Centrat între preț și baza etichetei)
-        y_logo = 960 
+        y_logo = 870 
         img.paste(logo, (x_logo, y_logo), logo)
     except:
         pass
@@ -241,3 +241,4 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf_output = pdf.output(dest='S').encode('latin-1')
     
     st.download_button("💾 DESCARCĂ PDF", pdf_output, "Etichete.pdf", "application/pdf")
+
