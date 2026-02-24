@@ -124,4 +124,25 @@ if df is not None:
                 lx = st.number_input("X (100=Centru)", 0, 800, 100, key=f"lx_{i}")
                 ly = st.number_input("Y", 0, 1200, 1080, key=f"ly_{i}")
             
-            date_etichete.append(
+            date_etichete.append(row_data)
+            reglaje_etichete.append({'fs': fs, 'ls': ls, 'lsc': sc, 'lx': lx, 'ly': ly})
+
+            img_res = creeaza_imagine_eticheta(row_data, fs, ls, sc, lx, ly)
+            st.image(img_res, width=zoom_preview)
+            reglaje_etichete[i]['img'] = img_res
+
+    st.divider()
+    if st.button("🚀 GENEREAZĂ PDF FINAL"):
+        final_canvas = Image.new('RGB', (2400, 1200))
+        for i in range(3):
+            final_canvas.paste(reglaje_etichete[i]['img'], (i * 800, 0))
+
+        pdf = FPDF(orientation='L', unit='mm', format='A4')
+        pdf.add_page()
+        buf = io.BytesIO()
+        final_canvas.save(buf, format='PNG')
+        buf.seek(0)
+        with open("temp.png", "wb") as f: f.write(buf.read())
+        pdf.image("temp.png", x=5, y=5, w=287)
+        
+        st.download_button("💾 DESCARCĂ PDF", pdf.output(dest='S').encode('latin-1'), "Etichete_Complet.pdf", "application/pdf")
