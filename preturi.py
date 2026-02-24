@@ -6,41 +6,34 @@ import requests
 from fpdf import FPDF
 
 # Configurare pagină
-st.set_page_config(page_title="ExpressCredit - Mega Font Configurator", layout="wide")
+st.set_page_config(page_title="ExpressCredit - Pro Configurator", layout="wide")
 
-# CSS pentru aspect compact
+# CSS pentru aspect profesional și text de reglaje mărit
 st.markdown("""
     <style>
     [data-testid="column"] { padding: 0px !important; margin: 0px !important; }
     .stSelectbox label { display:none; }
-    div.stButton > button { width: 100%; }
+    /* Mărire text în interiorul expander-ului de reglaje */
+    .stSlider label, .stSelectbox label, .stNumberInput label, .stRadio label {
+        font-size: 1.2rem !important;
+        font-weight: bold !important;
+    }
+    div.stButton > button { width: 100%; height: 3em; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LISTĂ EXEMPLE FONTURI (Poți adăuga orice nume din fonts.google.com) ---
-FONT_LIST = [
-    "Roboto", "Open Sans", "Lato", "Montserrat", "Oswald", "Source Sans Pro", "Slabo 27px", 
-    "Raleway", "PT Sans", "Merriweather", "Nunito", "Playfair Display", "Lora", "Ubuntu", 
-    "Bebas Neue", "Dancing Script", "Pacifico", "Caveat", "Satisfy", "Lobster", "Abril Fatface",
-    "Kanit", "Fira Sans", "Quicksand", "Anton", "Josefin Sans", "Libre Baskerville", "Arvo"
-    # Poți adăuga până la 100+ nume aici
-]
+# --- LISTĂ FONTURI ---
+FONT_LIST = ["Roboto", "Open Sans", "Lato", "Montserrat", "Oswald", "Raleway", "Ubuntu", "Bebas Neue", "Lobster", "Dancing Script", "Caveat"]
 
-# --- FUNCȚIE DESCARCARE FONT ---
 @st.cache_data
 def get_google_font(font_name, weight="Regular"):
-    # Încearcă să găsească varianta potrivită (Regular, Bold, Italic)
-    variant = weight.lower().replace(" ", "")
     url = f"https://github.com/google/fonts/raw/main/ofl/{font_name.lower().replace(' ', '')}/{font_name}-{weight}.ttf"
     try:
         response = requests.get(url)
-        if response.status_code == 200:
-            return io.BytesIO(response.content)
-    except:
-        pass
+        if response.status_code == 200: return io.BytesIO(response.content)
+    except: pass
     return None
 
-# --- FUNCȚIE GENERARE ETICHETĂ ---
 def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style):
     W, H = 800, 1200
     rosu_express = (204, 9, 21)
@@ -50,27 +43,23 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     margine = 40
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
 
-    # Încărcare font custom
     font_data = get_google_font(font_name, font_style)
     try:
         if font_data:
-            f_titlu = ImageFont.truetype(font_data, int(font_size * 1.3))
+            f_titlu = ImageFont.truetype(font_data, int(font_size * 1.2))
             font_data.seek(0)
             f_valoare = ImageFont.truetype(font_data, font_size)
-            # Pentru label folosim varianta Bold dacă e disponibilă
             bold_data = get_google_font(font_name, "Bold") or font_data
             f_label = ImageFont.truetype(bold_data, font_size)
-        else:
-            raise Exception("Font not found")
-    except:
-        f_titlu = f_label = f_valoare = ImageFont.load_default()
+        else: raise Exception()
+    except: f_titlu = f_label = f_valoare = ImageFont.load_default()
 
-    # --- CENTRARE NUME MODEL ---
+    # Centrare Nume Model
     txt_model = f"{row['Brand']} {row['Model']}"
     w_tm = draw.textlength(txt_model, font=f_titlu)
     draw.text(((W - w_tm) // 2, margine * 3.5), txt_model, fill=albastru_text, font=f_titlu)
 
-    # --- SPECIFICAȚII ---
+    # Specificații
     y_pos = margine * 7.0
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Sanatate baterie", "Capacitate baterie"]
     
@@ -82,58 +71,62 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             draw.text((margine * 2 + offset, y_pos), val, fill="black", font=f_valoare)
             y_pos += line_spacing
 
-    # --- CENTRARE LOGO ---
+    # Logo centrat sau manual
     try:
         url_logo = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         logo = Image.open(io.BytesIO(requests.get(url_logo).content)).convert("RGBA")
         lw = int(W * l_scale)
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
-        x_final = (W - lw) // 2 if l_x_manual == 100 else l_x_manual
-        img.paste(logo, (x_final, l_y), logo)
+        x_f = (W - lw) // 2 if l_x_manual == 100 else l_x_manual
+        img.paste(logo, (x_f, l_y), logo)
     except: pass
-        
     return img
 
-# --- INTERFAȚĂ ---
-df = pd.read_excel("https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx") if 'df' not in locals() else st.session_state.get('df')
+# --- LOGICĂ APLICAȚIE ---
+try:
+    df = pd.read_excel("https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx")
+except:
+    st.error("Eroare la încărcarea Excel-ului.")
+    st.stop()
 
-if df is not None:
-    st.sidebar.header("🔍 Vizibilitate")
-    zoom_preview = st.sidebar.slider("Zoom Previzualizare (px)", 100, 600, 320)
+st.sidebar.header("🔍 Control Vizual")
+zoom = st.sidebar.slider("Lățime previzualizare (px)", 150, 800, 350)
 
-    col1, col2, col3 = st.columns(3)
-    cols = [col1, col2, col3]
-    reglaje_etichete = []
+col1, col2, col3 = st.columns(3)
+cols = [col1, col2, col3]
+reglaje = []
 
-    for i in range(3):
-        with cols[i]:
-            brand = st.selectbox(f"B{i}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
-            model = st.selectbox(f"M{i}", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
-            row_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
-            
-            with st.expander("🎨 Stil Font & Design"):
-                f_name = st.selectbox("Familie Font", sorted(FONT_LIST), key=f"fn_{i}")
-                f_style = st.selectbox("Stil", ["Regular", "Bold", "Italic", "BoldItalic"], key=f"fst_{i}")
-                fs = st.slider("Mărime", 15, 45, 25, key=f"fs_{i}")
-                ls = st.slider("Spațiu", 15, 60, 32, key=f"ls_{i}")
-                sc = st.slider("Logo Scara", 0.1, 1.2, 0.7, key=f"lsc_{i}")
-                lx = st.number_input("X (100=Centru)", 0, 800, 100, key=f"lx_{i}")
-                ly = st.number_input("Y", 0, 1200, 1080, key=f"ly_{i}")
-            
-            img_res = creeaza_imagine_eticheta(row_data, fs, ls, sc, lx, ly, f_name, f_style)
-            st.image(img_res, width=zoom_preview)
-            reglaje_etichete.append({'img': img_res})
+for i in range(3):
+    with cols[i]:
+        # Dropdowns
+        brand = st.selectbox(f"B{i}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
+        model = st.selectbox(f"M{i}", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
+        row_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
+        
+        # Panou reglaje - lățimea se adaptează la coloană
+        with st.expander("🔧 SETĂRI ETICHETĂ", expanded=False):
+            fn = st.selectbox("Font", sorted(FONT_LIST), key=f"fn_{i}")
+            fs = st.selectbox("Stil", ["Regular", "Bold", "Italic", "BoldItalic"], key=f"fst_{i}")
+            size = st.slider("Mărime Font (pt)", 10, 150, 25, key=f"sz_{i}")
+            sp = st.slider("Spațiu Rânduri", 10, 100, 35, key=f"sp_{i}")
+            ls = st.slider("Scară Logo", 0.1, 1.5, 0.7, key=f"ls_{i}")
+            lx = st.number_input("X (100=Centru)", 0, 800, 100, key=f"lx_{i}")
+            ly = st.number_input("Y Logo", 0, 1200, 1050, key=f"ly_{i}")
 
-    if st.button("🚀 GENEREAZĂ PDF FINAL"):
-        final_canvas = Image.new('RGB', (2400, 1200))
-        for i in range(3):
-            final_canvas.paste(reglaje_etichete[i]['img'], (i * 800, 0))
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        pdf.add_page()
-        buf = io.BytesIO()
-        final_canvas.save(buf, format='PNG')
-        buf.seek(0)
-        with open("temp.png", "wb") as f: f.write(buf.read())
-        pdf.image("temp.png", x=5, y=5, w=287)
-        st.download_button("💾 DESCARCĂ PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf", "application/pdf")
+        img = creeaza_imagine_eticheta(row_data, size, sp, ls, lx, ly, fn, fs)
+        st.image(img, width=zoom)
+        reglaje.append({'img': img})
+
+st.divider()
+if st.button("🚀 DESCARCĂ PDF FINAL (3 ETICHETE)"):
+    canvas = Image.new('RGB', (2400, 1200))
+    for i in range(3): canvas.paste(reglaje[i]['img'], (i * 800, 0))
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.add_page()
+    buf = io.BytesIO()
+    canvas.save(buf, format='PNG')
+    buf.seek(0)
+    with open("temp.png", "wb") as f: f.write(buf.read())
+    pdf.image("temp.png", x=5, y=5, w=287)
+    st.download_button("💾 SALVEAZĂ PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf", "application/pdf")
