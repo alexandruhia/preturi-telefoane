@@ -15,6 +15,9 @@ st.markdown("""
         padding: 0px !important;
         margin: 0px !important;
     }
+    .stSelectbox label {
+        display:none;
+    }
     div.stButton > button {
         width: 100%;
     }
@@ -42,6 +45,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
     img = Image.new('RGB', (W, H), color=rosu_express)
     draw = ImageDraw.Draw(img)
     margine = 40
+    # Card alb (fundal)
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
 
     try:
@@ -53,19 +57,28 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
     except:
         f_titlu = f_bold = f_normal = ImageFont.load_default()
 
+    # Titluri
     draw.text((margine*2, margine*2.5), "FISA TEHNICA:", fill=albastru_text, font=f_titlu)
     draw.text((margine*2, margine*2.5 + 65), f"{row['Brand']} {row['Model']}", fill=albastru_text, font=f_titlu)
 
+    # Toate specificațiile solicitate
     y_pos = margine * 6.5
-    specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Capacitate baterie"]
+    specs = [
+        "Display", "OS", "Procesor", "Stocare", "RAM", 
+        "Camera principala", "Selfie", "Sanatate baterie", "Capacitate baterie"
+    ]
+    
     for col in specs:
         if col in row.index:
             val = str(row[col]) if pd.notna(row[col]) else "-"
+            # Scriem eticheta (BOLD)
             draw.text((margine*2, y_pos), f"{col}:", fill="black", font=f_bold)
             offset = draw.textlength(f"{col}: ", font=f_bold)
+            # Scriem valoarea (NORMAL)
             draw.text((margine*2 + offset, y_pos), val, fill="black", font=f_normal)
             y_pos += line_spacing
 
+    # Inserare Logo
     try:
         url_logo = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         logo = Image.open(io.BytesIO(requests.get(url_logo).content)).convert("RGBA")
@@ -80,11 +93,10 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x, l_y):
 df = incarca_date()
 
 if df is not None:
-    # Sidebar pentru Zoom-ul de Previzualizare
-    st.sidebar.header("🔍 Zoom Interfață")
-    zoom_val = st.sidebar.slider("Lățime Etichetă (px)", 100, 500, 300)
+    st.sidebar.header("🔍 Control Global")
+    zoom_val = st.sidebar.slider("Zoom Previzualizare (px)", 100, 600, 300)
 
-    # Cream 3 coloane principale pentru tot (Selecție + Previzualizare)
+    # Cele 3 coloane principale
     col1, col2, col3 = st.columns(3)
     cols = [col1, col2, col3]
     
@@ -93,48 +105,5 @@ if df is not None:
 
     for i in range(3):
         with cols[i]:
-            # Zona de selecție (proporțională cu coloana)
-            st.markdown(f"**ETICHETA {i+1}**")
-            brand = st.selectbox("Brand", sorted(df['Brand'].dropna().unique()), key=f"b_{i}", label_visibility="collapsed")
-            modele = df[df['Brand'] == brand]['Model'].dropna().unique()
-            model = st.selectbox("Model", modele, key=f"m_{i}", label_visibility="collapsed")
-            row_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
-            
-            with st.expander("⚙️"):
-                fs = st.slider("Font", 20, 60, 32, key=f"fs_{i}")
-                ls = st.slider("Spațiu", 20, 80, 40, key=f"ls_{i}")
-                sc = st.slider("Logo", 0.1, 1.2, 0.7, key=f"lsc_{i}")
-                lx = st.number_input("X", 0, 800, 100, key=f"lx_{i}")
-                ly = st.number_input("Y", 0, 1200, 1080, key=f"ly_{i}")
-            
-            date_etichete.append(row_data)
-            reglaje_etichete.append({'fs': fs, 'ls': ls, 'lsc': sc, 'lx': lx, 'ly': ly})
-
-            # Generăm imaginea pentru coloana curentă
-            img = creeaza_imagine_eticheta(row_data, fs, ls, sc, lx, ly)
-            # Afișăm imaginea imediat sub selecție, cu lățimea controlată de zoom
-            st.image(img, width=zoom_val)
-            reglaje_etichete[i]['img'] = img
-
-    # --- BUTON PRINT ---
-    st.divider()
-    if st.button("🚀 GENEREAZĂ PDF FINAL (3 ETICHETE)"):
-        final_w = 800 * 3
-        canvas = Image.new('RGB', (final_w, 1200))
-        for i in range(3):
-            canvas.paste(reglaje_etichete[i]['img'], (i * 800, 0))
-
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        pdf.add_page()
-        img_buf = io.BytesIO()
-        canvas.save(img_buf, format='PNG')
-        img_buf.seek(0)
-        with open("temp.png", "wb") as f: f.write(img_buf.read())
-        pdf.image("temp.png", x=5, y=5, w=287)
-        
-        st.download_button(
-            label="💾 DESCARCĂ PDF",
-            data=pdf.output(dest='S').encode('latin-1'),
-            file_name="Etichete_Express.pdf",
-            mime="application/pdf"
-        )
+            # Selectoare compacte (fără label-uri vizibile datorită CSS)
+            brand = st.selectbox(f
