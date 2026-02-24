@@ -6,70 +6,58 @@ import requests
 from fpdf import FPDF
 
 # Configurare pagină
-st.set_page_config(page_title="ExpressCredit Pro", layout="wide")
+st.set_page_config(page_title="ExpressCredit Fix", layout="wide")
 
-# --- FUNCȚIE DESCARCARE FONT CU EROARE GESTIONATĂ ---
+# --- FUNCȚII RESURSE ---
 @st.cache_data(show_spinner=False)
-def get_font_safe(url):
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            return response.content
-    except:
-        pass
-    return None
+def load_data():
+    url = "https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx"
+    return pd.read_excel(url)
 
-# Link-uri fonturi
-URL_BOLD = "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-Bold.ttf"
-URL_REG = "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-Regular.ttf"
+@st.cache_data(show_spinner=False)
+def get_font_bytes():
+    # Descărcăm fontul o singură dată în cache
+    url = "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-Bold.ttf"
+    return requests.get(url).content
 
-def draw_label(row, p_text, b_text, ag_text, p_size, p_y, f_size, s_space, l_scale, l_y):
+# --- GENERARE IMAGINE (FĂRĂ CACHE) ---
+def creeaza_imagine(row, p_text, b_text, ag_text, p_size, p_y, f_size, s_space, l_scale, l_y):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([40, 40, 760, 980], radius=60, fill="white")
 
-    # Încercăm să luăm fonturile
-    raw_b = get_font_safe(URL_BOLD)
-    raw_r = get_font_safe(URL_REG)
-
-    def get_font_obj(raw_data, size):
-        try:
-            if raw_data:
-                return ImageFont.truetype(io.BytesIO(raw_data), int(size))
-        except:
-            pass
-        return ImageFont.load_default()
-
-    # Creare obiecte font (Mărimea p_size acum va funcționa până la 500)
-    f_titlu = get_font_obj(raw_b, 45)
-    f_spec = get_font_obj(raw_b, f_size)
-    f_val = get_font_obj(raw_r, f_size)
-    f_pret = get_font_obj(raw_b, p_size) # AICI se aplică mărirea
-    f_bag = get_font_obj(raw_b, 30)
+    font_bytes = get_font_bytes()
+    
+    # Creăm obiectele de font proaspete la fiecare rulare
+    try:
+        f_titlu = ImageFont.truetype(io.BytesIO(font_bytes), 45)
+        f_spec = ImageFont.truetype(io.BytesIO(font_bytes), int(f_size))
+        f_pret = ImageFont.truetype(io.BytesIO(font_bytes), int(p_size))
+        f_bag = ImageFont.truetype(io.BytesIO(font_bytes), 30)
+    except:
+        f_titlu = f_spec = f_pret = f_bag = ImageFont.load_default()
 
     # Titlu
     txt_m = f"{row['Brand']} {row['Model']}"
     draw.text(((W - draw.textlength(txt_m, font=f_titlu)) // 2, 100), txt_m, fill=(0, 51, 102), font=f_titlu)
 
-    # Specificații
+    # Specificații (Mărimea f_size se aplică aici)
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Sanatate baterie"]
-    y = 240
+    current_y = 240
     for s in specs:
-        if s in row:
-            val = str(row[s]) if pd.notna(row[s]) else "-"
-            draw.text((80, y), f"{s}:", fill="black", font=f_spec)
-            off = draw.textlength(f"{s}: ", font=f_spec)
-            draw.text((80 + off, y), val, fill="black", font=f_val)
-            y += s_space
+        if s in row and pd.notna(row[s]):
+            txt_s = f"{s}: {row[s]}"
+            draw.text((80, current_y), txt_s, fill="black", font=f_spec)
+            current_y += s_space
 
-    # Preț (Mărire până la 500)
+    # Preț (Mărimea p_size se aplică aici)
     if p_text:
         txt_p = f"Pret: {p_text} lei"
         w_p = draw.textlength(txt_p, font=f_pret)
         draw.text(((W - w_p) // 2, p_y), txt_p, fill=(204, 9, 21), font=f_pret)
 
-    # Rubrica B@Ag (Dreapta, 30pt Bold)
+    # B@Ag (Fix 30pt Bold)
     txt_bag = f"B{b_text}@{ag_text}"
     w_bag = draw.textlength(txt_bag, font=f_bag)
     draw.text((740 - w_bag, 920), txt_bag, fill="black", font=f_bag)
@@ -87,47 +75,48 @@ def draw_label(row, p_text, b_text, ag_text, p_size, p_y, f_size, s_space, l_sca
     return img
 
 # --- INTERFAȚĂ ---
-try:
-    df = pd.read_excel("https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx")
-except:
-    st.error("Nu pot încărca Excel-ul.")
-    st.stop()
-
+df = load_data()
 ag_list = [str(i) for i in range(1, 53)]
+
 cols = st.columns(3)
 final_images = []
 
 for i in range(3):
     with cols[i]:
-        br = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].unique()), key=f"br{i}")
-        md = st.selectbox(f"Model {i+1}", df[df['Brand'] == br]['Model'].unique(), key=f"md{i}")
-        row = df[(df['Brand'] == br) & (df['Model'] == md)].iloc[0]
+        br = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].unique()), key=f"brand{i}")
+        md = st.selectbox(f"Model {i+1}", df[df['Brand'] == br]['Model'].unique(), key=f"model{i}")
+        row_sel = df[(df['Brand'] == br) & (df['Model'] == md)].iloc[0]
         
-        pr_text = st.text_input(f"Preț {i+1}", "1500", key=f"pt{i}")
+        # Câmpuri text
+        pret_val = st.text_input(f"Preț {i+1}", "1500", key=f"p_txt{i}")
         c1, c2 = st.columns(2)
-        with c1: b_text = st.text_input(f"B{i+1}", "32511", key=f"bt{i}")
-        with c2: ag_text = st.selectbox(f"Ag{i+1}", ag_list, index=27, key=f"at{i}")
+        with c1: b_val = st.text_input(f"B{i+1}", "32511", key=f"b_txt{i}")
+        with c2: ag_val = st.selectbox(f"Ag{i+1}", ag_list, index=27, key=f"a_txt{i}")
 
-        with st.expander(f"REGLAJE", expanded=True):
-            p_size = st.slider("MĂRIME PREȚ", 20, 500, 80, key=f"ps{i}")
-            p_y = st.slider("Poziție Y Preț", 300, 950, 820, key=f"py{i}")
-            f_size = st.slider("Mărime Specificații", 10, 80, 26, key=f"fs{i}")
-            s_space = st.slider("Spațiere rânduri", 20, 100, 40, key=f"ss{i}")
-            l_sc = st.slider("Scară Logo", 0.1, 1.5, 0.7, key=f"ls{i}")
-            l_y_pos = st.slider("Poziție Logo", 900, 1150, 1040, key=f"ly{i}")
+        # Slidere
+        with st.expander("⚙️ AJUSTĂRI DIMENSIUNI", expanded=True):
+            p_size = st.slider(f"Mărime Preț (max 500)", 20, 500, 80, key=f"psize{i}")
+            p_y_pos = st.slider(f"Înălțime Preț", 300, 950, 820, key=f"py{i}")
+            f_size = st.slider(f"Mărime Specificații", 10, 100, 26, key=f"fsize{i}")
+            s_spc = st.slider(f"Spațiere rânduri", 10, 100, 40, key=f"sspc{i}")
+            l_sc = st.slider(f"Scară Logo", 0.1, 1.5, 0.7, key=f"lsc{i}")
+            l_y_p = st.slider(f"Poziție Logo", 900, 1150, 1040, key=f"lyp{i}")
 
-        img = draw_label(row, pr_text, b_text, ag_text, p_size, p_y, f_size, s_space, l_sc, l_y_pos)
-        st.image(img, use_container_width=True)
-        final_images.append(img)
+        # Generăm imaginea - FĂRĂ CACHE, se va actualiza la orice slider
+        label_img = creeaza_imagine(row_sel, pret_val, b_val, ag_val, p_size, p_y_pos, f_size, s_spc, l_sc, l_y_p)
+        st.image(label_img, use_container_width=True)
+        final_images.append(label_img)
 
-if st.button("🚀 GENEREAZĂ PDF"):
+# PDF
+if st.button("🚀 SALVEAZĂ PDF"):
     canvas = Image.new('RGB', (2400, 1200))
-    for idx, image in enumerate(final_images): canvas.paste(image, (idx * 800, 0))
+    for idx, img_obj in enumerate(final_images):
+        canvas.paste(img_obj, (idx * 800, 0))
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     buf = io.BytesIO()
     canvas.save(buf, format='PNG')
     buf.seek(0)
-    with open("print.png", "wb") as f: f.write(buf.read())
-    pdf.image("print.png", x=5, y=5, w=287)
+    with open("temp.png", "wb") as f: f.write(buf.read())
+    pdf.image("temp.png", x=5, y=5, w=287)
     st.download_button("💾 DESCARCĂ PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf")
