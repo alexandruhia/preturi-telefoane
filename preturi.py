@@ -48,7 +48,7 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style, pret_val, pret_y, pret_size, b_text, ag_val, baterie_manual):
+def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style, pret_val, pret_y, pret_size, b_text, ag_val):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
@@ -64,11 +64,14 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
             f_valoare = ImageFont.truetype(io.BytesIO(f_bytes), font_size)
             f_pret = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
-            f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40)
+            f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40) # Font setat la 40
         else:
             path_b = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-            f_titlu = f_label = f_pret = f_bag = ImageFont.truetype(path_b, font_size)
-            f_valoare = ImageFont.load_default()
+            f_titlu = ImageFont.truetype(path_b, int(font_size * 1.3))
+            f_label = ImageFont.truetype(path_b, font_size)
+            f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            f_pret = ImageFont.truetype(path_b, pret_size)
+            f_bag = ImageFont.truetype(path_b, 40)
     except:
         f_titlu = f_label = f_valoare = f_pret = f_bag = ImageFont.load_default()
 
@@ -79,8 +82,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
 
     # Specificații
     y_pos = margine * 7.5
-    specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Capacitate baterie"]
-    
+    specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Sanatate baterie", "Capacitate baterie"]
     for col in specs:
         if col in row.index:
             val = str(row[col]) if pd.notna(row[col]) else "-"
@@ -89,20 +91,13 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             draw.text((margine * 2 + offset, y_pos), val, fill="black", font=f_valoare)
             y_pos += line_spacing
 
-    # Adăugare manuală Sănătate Baterie
-    if baterie_manual:
-        draw.text((margine * 2, y_pos), "Sanatate baterie:", fill="black", font=f_label)
-        offset = draw.textlength("Sanatate baterie: ", font=f_label)
-        draw.text((margine * 2 + offset, y_pos), baterie_manual, fill="black", font=f_valoare)
-        y_pos += line_spacing
-
     # --- TEXT PREȚ ---
     if pret_val:
         txt_p = f"Pret: {pret_val} lei"
         w_p = draw.textlength(txt_p, font=f_pret)
         draw.text(((W - w_p) // 2, pret_y), txt_p, fill=(204, 9, 21), font=f_pret)
         
-        # --- RUBRICA B@Ag ---
+        # --- RUBRICA B@Ag (Sub preț, în dreapta) ---
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
         draw.text((W - margine * 2 - w_bag, pret_y + pret_size + 10), txt_bag, fill="black", font=f_bag)
@@ -133,6 +128,8 @@ zoom = st.sidebar.slider("Lățime Previzualizare", 200, 1000, 400)
 col1, col2, col3 = st.columns(3)
 cols = [col1, col2, col3]
 final_imgs = []
+
+# Opțiuni pentru dropdown Ag
 ag_list = [str(i) for i in range(1, 56)]
 
 for i in range(3):
@@ -141,10 +138,10 @@ for i in range(3):
         model = st.selectbox(f"Model Telefon {i+1}", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
         r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
         
-        # --- INPUTURI MANUALE ---
-        bat_manual = st.text_input(f"Sănătate Baterie {i+1}", value="100%", key=f"bat_{i}")
+        # Secțiune Preț dedicată
         pret_input = st.text_input(f"Pret Telefon {i+1}", value="", key=f"pr_{i}", placeholder="Ex: 1500")
         
+        # Secțiune B@Ag
         sub_c1, sub_c2 = st.columns(2)
         with sub_c1:
             b_input = st.text_input(f"Text B {i+1}", value="", key=f"bt_{i}", placeholder="cod")
@@ -166,7 +163,7 @@ for i in range(3):
             lx = st.number_input("X Logo (100=Centrat)", 0, 800, 100, key=f"lx_{i}")
             ly = st.number_input("Y Logo", 0, 1200, 1050, key=f"ly_{i}")
 
-        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, fs, pret_input, p_y, p_size, b_input, ag_input, bat_manual)
+        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, fs, pret_input, p_y, p_size, b_input, ag_input)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
