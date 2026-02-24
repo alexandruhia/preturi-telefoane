@@ -71,8 +71,11 @@ st.markdown(f"""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# FUNCȚII GENERARE FONT ȘI IMAGINE
+# CONSTANTE ȘI FUNCȚII GENERARE
 # ==========================================
+STOCARE_OPTIUNI = ["8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
+RAM_OPTIUNI = ["1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB", "12 GB", "16 GB", "24 GB", "32 GB"]
+
 @st.cache_data(show_spinner=False)
 def get_font_bytes(font_name, weight):
     folders = ['ofl', 'apache', 'googlefonts']
@@ -85,7 +88,7 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
+def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val, stocare_val, ram_val):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
@@ -116,30 +119,35 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
     except:
         f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
-    # TITLU - BRAND ȘI MODEL CENTRATE
+    # TITLU - BRAND ȘI MODEL
     txt_brand = str(row['Brand'])
     txt_model = str(row['Model'])
-    
-    w_brand = draw.textlength(txt_brand, font=f_titlu)
-    w_model = draw.textlength(txt_model, font=f_titlu)
-    
-    draw.text(((W - w_brand) // 2, margine * 2.5), txt_brand, fill="#000000", font=f_titlu)
-    draw.text(((W - w_model) // 2, margine * 2.5 + titlu_size), txt_model, fill="#000000", font=f_titlu)
+    draw.text(((W - draw.textlength(txt_brand, font=f_titlu)) // 2, margine * 2.5), txt_brand, fill="#000000", font=f_titlu)
+    draw.text(((W - draw.textlength(txt_model, font=f_titlu)) // 2, margine * 2.5 + titlu_size), txt_model, fill="#000000", font=f_titlu)
 
-    # SPECIFICAȚII
+    # SPECIFICAȚII (Cu valorile noi pentru Stocare și RAM)
     y_pos = margine * 10 
-    specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Capacitate baterie"]
-    for col in specs:
-        if col in row.index:
-            val = str(row[col]) if pd.notna(row[col]) else "-"
-            draw.text((margine * 1.5, y_pos), f"{col}:", fill="#333333", font=f_label)
-            offset = draw.textlength(f"{col}: ", font=f_label)
-            draw.text((margine * 1.5 + offset, y_pos), val, fill="#000000", font=f_valoare)
-            y_pos += line_spacing
+    
+    # Construim lista de specificații manual pentru a include noile selectoare
+    specs = [
+        ("Display", row.get("Display", "-")),
+        ("OS", row.get("OS", "-")),
+        ("Procesor", row.get("Procesor", "-")),
+        ("Stocare", stocare_val),
+        ("RAM", ram_val),
+        ("Camera principala", row.get("Camera principala", "-")),
+        ("Selfie", row.get("Selfie", "-")),
+        ("Capacitate baterie", row.get("Capacitate baterie", "-")),
+        ("Sanatate baterie", f"{bat_val}%")
+    ]
 
-    draw.text((margine * 1.5, y_pos), "Sanatate baterie:", fill="#333333", font=f_label)
-    offset_bat = draw.textlength("Sanatate baterie: ", font=f_label)
-    draw.text((margine * 1.5 + offset_bat, y_pos), f"{bat_val}%", fill="#000000", font=f_valoare)
+    for label, val in specs:
+        text_label = f"{label}: "
+        text_val = str(val) if pd.notna(val) else "-"
+        draw.text((margine * 1.5, y_pos), text_label, fill="#333333", font=f_label)
+        offset = draw.textlength(text_label, font=f_label)
+        draw.text((margine * 1.5 + offset, y_pos), text_val, fill="#000000", font=f_valoare)
+        y_pos += line_spacing
 
     # PREȚ
     if pret_val:
@@ -157,23 +165,16 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         w_bag = draw.textlength(txt_bag, font=f_bag)
         draw.text((W - margine * 2 - w_bag, y_base + 35), txt_bag, fill="#333333", font=f_bag)
 
-    # LOGO BLOCAT (MAI MARE ȘI MAI SUS)
+    # LOGO
     try:
         url_l = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         logo_resp = requests.get(url_l, timeout=5)
         logo = Image.open(io.BytesIO(logo_resp.content)).convert("RGBA")
-        
-        # LOGO MAI MARE: 90% din lățime
         lw = int(W * 0.9) 
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
-        
-        x_logo = (W - lw) // 2
-        # POZIȚIE RIDICATĂ: 960 (Centrat între preț și baza etichetei)
-        y_logo = 870 
-        img.paste(logo, (x_logo, y_logo), logo)
-    except:
-        pass
+        img.paste(logo, ((W - lw) // 2, 870), logo)
+    except: pass
         
     return img
 
@@ -200,24 +201,33 @@ for i in range(3):
         model = st.selectbox(f"Model", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
         r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
         
+        # Detectare automată index pentru drop-down din datele Excel
+        def get_index(val, options):
+            val_str = str(val).strip() if pd.notna(val) else ""
+            if val_str in options: return options.index(val_str)
+            return 0
+
         c1, c2 = st.columns(2)
         with c1:
+            stocare_choice = st.selectbox("Stocare", STOCARE_OPTIUNI, index=get_index(r_data.get('Stocare'), STOCARE_OPTIUNI), key=f"stoc_{i}")
             bat_choice = st.selectbox(f"Baterie %", battery_list, key=f"bat_{i}")
             b_input = st.text_input(f"Cod B", key=f"bt_{i}")
             t_size = st.number_input("Mărime Titlu", 10, 150, 48, key=f"tsz_{i}")
-            f_size = st.number_input("Mărime Spec.", 10, 100, 28, key=f"sz_{i}")
+            
         with c2:
+            ram_choice = st.selectbox("RAM", RAM_OPTIUNI, index=get_index(r_data.get('RAM'), RAM_OPTIUNI), key=f"ram_{i}")
             pret_input = st.text_input(f"Preț Lei", key=f"pr_{i}")
             ag_input = st.selectbox(f"Valoare Ag", ag_list, key=f"ag_{i}")
-            fn = st.selectbox("Font", FONT_NAMES, key=f"fn_{i}")
-            c_size = st.number_input("Cifră Preț", 20, 300, 95, key=f"csz_{i}")
+            f_size = st.number_input("Mărime Spec.", 10, 100, 28, key=f"sz_{i}")
 
         with st.expander("🛠️ AJUSTARE POZIȚIE TEXT"):
             p_y = st.slider("Înălțime Preț", 400, 1150, 850, key=f"py_{i}")
             p_size = st.slider("Mărime 'Pret:'", 20, 150, 55, key=f"psz_{i}")
+            c_size = st.number_input("Cifră Preț", 20, 300, 95, key=f"csz_{i}")
             sp = st.slider("Spațiere rânduri", 10, 100, 42, key=f"sp_{i}")
+            fn = st.selectbox("Font", FONT_NAMES, key=f"fn_{i}")
 
-        current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
+        current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice, stocare_choice, ram_choice)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
@@ -241,5 +251,3 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf_output = pdf.output(dest='S').encode('latin-1')
     
     st.download_button("💾 DESCARCĂ PDF", pdf_output, "Etichete.pdf", "application/pdf")
-
-
