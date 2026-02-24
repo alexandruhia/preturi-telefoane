@@ -20,8 +20,9 @@ def incarca_date():
         st.error(f"Eroare la încărcarea datelor: {e}")
         return None
 
-# --- FUNCȚIE GENERARE ETICHETĂ CU LOGO PNG ---
-def genereaza_eticheta_imagine(row, font_size, line_spacing, zoom_level):
+# --- FUNCȚIE GENERARE ETICHETĂ ---
+def genereaza_eticheta_imagine(row, font_size, line_spacing, zoom_level, logo_scale):
+    # Dimensiuni bază
     W = int(800 * zoom_level)
     H = int(1200 * zoom_level)
     rosu_express = (204, 9, 21)
@@ -30,10 +31,10 @@ def genereaza_eticheta_imagine(row, font_size, line_spacing, zoom_level):
     img = Image.new('RGB', (W, H), color=rosu_express)
     draw = ImageDraw.Draw(img)
 
-    # 1. Cardul alb
+    # 1. Cardul alb (lăsăm mai mult loc jos pentru logo)
     margine = int(40 * zoom_level)
-    draw.rounded_rectangle([margine, margine, W-margine, H-int(180*zoom_level)], 
-                           radius=int(60*zoom_level), fill="white")
+    draw.rounded_rectangle([margine, margine, W-margine, H-int(220 * zoom_level)], 
+                           radius=int(60 * zoom_level), fill="white")
 
     # 2. Setare fonturi
     try:
@@ -45,75 +46,85 @@ def genereaza_eticheta_imagine(row, font_size, line_spacing, zoom_level):
     except:
         f_titlu = f_bold = f_normal = ImageFont.load_default()
 
-    # 3. Titlu
+    # 3. Titlu principal
     draw.text((margine*2, margine*2.5), "FISA TEHNICA:", fill=albastru_text, font=f_titlu)
     draw.text((margine*2, margine*2.5 + int(65*zoom_level)), f"{row['Brand']} {row['Model']}", fill=albastru_text, font=f_titlu)
 
-    # 4. Specificații (Bold pt. Nume, Normal pt. Valoare)
+    # 4. Specificații (BOLD pentru nume, NORMAL pentru valoare)
     y_pos = margine * 6.5
     spec_liste = ["Display", "OS", "Procesor", "Stocare", "RAM", "Capacitate baterie"]
     
     for col in spec_liste:
         if col in row.index:
             val = str(row[col]) if pd.notna(row[col]) else "-"
+            # Scriem eticheta (BOLD)
             draw.text((margine*2, y_pos), f"{col}:", fill="black", font=f_bold)
-            latime_label = draw.textlength(f"{col}: ", font=f_bold)
-            draw.text((margine*2 + latime_label, y_pos), val, fill="black", font=f_normal)
+            # Calculăm lungimea etichetei pentru a pune valoarea imediat după
+            offset = draw.textlength(f"{col}: ", font=f_bold)
+            # Scriem valoarea (NORMAL)
+            draw.text((margine*2 + offset, y_pos), val, fill="black", font=f_normal)
             y_pos += int(line_spacing * zoom_level)
 
-    # 5. INSERARE LOGO PNG ÎN SUBSOL
+    # 5. INSERARE LOGO PNG (Cu redimensionare și poziționare jos)
     try:
-        # Folosim URL-ul imaginii tale (link direct)
         url_logo = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         response = requests.get(url_logo)
         logo = Image.open(io.BytesIO(response.content)).convert("RGBA")
         
-        # Redimensionăm logo-ul să fie cam 60% din lățimea etichetei
-        logo_w = int(W * 0.6)
+        # Redimensionare bazată pe slider (logo_scale este între 0.1 și 1.0)
+        logo_w = int(W * logo_scale)
         aspect_ratio = logo.size[1] / logo.size[0]
         logo_h = int(logo_w * aspect_ratio)
         logo = logo.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
         
-        # Îl centrăm jos în zona roșie
+        # Centrare orizontală și poziționare foarte jos
         x_logo = (W - logo_w) // 2
-        y_logo = H - logo_h - int(40 * zoom_level)
+        y_logo = H - logo_h - int(20 * zoom_level) # Doar 20px de marginea de jos
         
-        # Lipim logo-ul (folosind el însuși ca mască pentru transparență)
         img.paste(logo, (x_logo, y_logo), logo)
-    except Exception as e:
-        # Dacă logo-ul nu se încarcă, scriem textul ca rezervă
-        draw.text((W//4, H - int(100*zoom_level)), "ExpressCredit AMANET", fill="white", font=f_bold)
+    except:
+        draw.text((W//4, H - int(100*zoom_level)), "LOGO NEGASIT", fill="white", font=f_bold)
 
     buf = io.BytesIO()
     img.save(buf, format='PNG')
     return buf.getvalue()
 
-# --- INTERFAȚA ---
-st.title("🎨 Configurator Etichete ExpressCredit")
+# --- INTERFAȚĂ STREAMLIT ---
+st.title("🎨 ExpressCredit - Design Etichete")
 df = incarca_date()
 
 if df is not None:
+    # --- SIDEBAR REGLAJE ---
     st.sidebar.header("⚙️ Reglaje Design")
-    zoom_ref = st.sidebar.slider("Zoom imagine", 0.5, 2.0, 1.0, 0.1)
-    font_ref = st.sidebar.slider("Mărime scris", 20, 60, 35)
-    spatiere_ref = st.sidebar.slider("Distanța între rânduri", 30, 100, 50)
+    zoom_ref = st.sidebar.slider("Zoom Etichetă (DPI)", 0.5, 2.0, 1.0, 0.1)
+    logo_scale_ref = st.sidebar.slider("Mărime Logo", 0.1, 1.0, 0.7, 0.05)
+    font_ref = st.sidebar.slider("Mărime Font", 20, 70, 35)
+    spatiere_ref = st.sidebar.slider("Distanță Rânduri", 20, 100, 45)
 
+    # --- SELECȚIE DATE ---
     col1, col2 = st.columns(2)
     with col1:
-        brand_sel = st.selectbox("Alege Brand:", sorted(df['Brand'].dropna().unique()))
+        brand_sel = st.selectbox("Brand:", sorted(df['Brand'].dropna().unique()))
     with col2:
         modele = df[df['Brand'] == brand_sel]['Model'].dropna().unique()
-        model_sel = st.selectbox("Alege Model:", modele)
+        model_sel = st.selectbox("Model:", modele)
 
     date_tel = df[(df['Brand'] == brand_sel) & (df['Model'] == model_sel)].iloc[0]
     st.divider()
 
-    img_bytes = genereaza_eticheta_imagine(date_tel, font_ref, spatiere_ref, zoom_ref)
+    # --- PREVIEW ---
+    img_bytes = genereaza_eticheta_imagine(date_tel, font_ref, spatiere_ref, zoom_ref, logo_scale_ref)
     
-    col_prev, col_info = st.columns([1, 1])
-    with col_prev:
+    c_prev, c_act = st.columns([1.2, 1])
+    with c_prev:
         st.subheader("🖼️ Previzualizare")
-        st.image(img_bytes, use_container_width=False, width=int(400 * zoom_ref))
-    with col_info:
-        st.subheader("📥 Acțiuni")
-        st.download_button(label="💾 Descarcă Eticheta", data=img_bytes, file_name=f"Eticheta_{model_sel}.png", mime="image/png")
+        st.image(img_bytes, width=int(450 * zoom_ref))
+    with c_act:
+        st.subheader("📥 Finalizare")
+        st.info("Folosește sliderele din stânga pentru a regla aspectul perfect înainte de descărcare.")
+        st.download_button(
+            label="💾 Salvează Eticheta (PNG)", 
+            data=img_bytes, 
+            file_name=f"Eticheta_{model_sel}.png", 
+            mime="image/png"
+        )
