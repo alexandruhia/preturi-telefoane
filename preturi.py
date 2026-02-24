@@ -6,7 +6,7 @@ import requests
 from fpdf import FPDF
 
 # Configurare pagină
-st.set_page_config(page_title="ExpressCredit Pro", layout="wide")
+st.set_page_config(page_title="ExpressCredit Pro - Stabil", layout="wide")
 
 # CSS pentru panou de reglaje
 st.markdown("""
@@ -28,20 +28,19 @@ def load_excel_data():
     except:
         return pd.DataFrame(columns=["Brand", "Model"])
 
-# --- FUNCȚIE FONT SIGURĂ ---
+# --- DESCARCARE FONT (SALVĂM DOAR BYTES, NU OBIECTUL FONT) ---
 @st.cache_data(show_spinner=False)
-def load_font_safe(font_name, size):
-    # Încercăm să descărcăm fontul dorit
+def get_font_bytes(font_name):
     clean_name = font_name.lower().replace(" ", "")
+    # Încercăm varianta Bold direct pentru aspect profesional
     url = f"https://github.com/google/fonts/raw/main/ofl/{clean_name}/{font_name.replace(' ', '')}-Bold.ttf"
     try:
-        r = requests.get(url, timeout=2)
+        r = requests.get(url, timeout=5)
         if r.status_code == 200:
-            return ImageFont.truetype(io.BytesIO(r.content), int(size))
+            return r.content
     except:
         pass
-    # Dacă nu merge, folosim fontul default al sistemului
-    return ImageFont.load_default()
+    return None
 
 def draw_label(row, fs, ls, l_sc, l_y, p_val, p_y, p_size, b_val, ag_val, bag_size, font_name):
     W, H = 800, 1200
@@ -49,11 +48,20 @@ def draw_label(row, fs, ls, l_sc, l_y, p_val, p_y, p_size, b_val, ag_val, bag_si
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([40, 40, 760, 980], radius=60, fill="white")
 
-    # Incarcare fonturi cu protectie
-    f_titlu = load_font_safe(font_name, 45)
-    f_spec = load_font_safe(font_name, fs)
-    f_pret = load_font_safe(font_name, p_size)
-    f_bag = load_font_safe(font_name, bag_size)
+    # Obținem datele brute ale fontului din cache
+    font_bytes = get_font_bytes(font_name)
+    
+    # Creăm obiectele font pe loc (fără cache pe obiect, doar pe bytes)
+    try:
+        if font_bytes:
+            f_titlu = ImageFont.truetype(io.BytesIO(font_bytes), 45)
+            f_spec = ImageFont.truetype(io.BytesIO(font_bytes), int(fs))
+            f_pret = ImageFont.truetype(io.BytesIO(font_bytes), int(p_size))
+            f_bag = ImageFont.truetype(io.BytesIO(font_bytes), int(bag_size))
+        else:
+            f_titlu = f_spec = f_pret = f_bag = ImageFont.load_default()
+    except:
+        f_titlu = f_spec = f_pret = f_bag = ImageFont.load_default()
 
     # 1. Model
     txt_m = f"{row.get('Brand', '')} {row.get('Model', '')}".strip()
@@ -77,12 +85,14 @@ def draw_label(row, fs, ls, l_sc, l_y, p_val, p_y, p_size, b_val, ag_val, bag_si
     # 4. Rubrica B@Ag
     txt_bag = f"B{b_val}@Ag{ag_val}"
     w_bag = draw.textlength(txt_bag, font=f_bag)
+    # Poziționare sub preț
     draw.text(((W - w_bag) // 2, p_y + p_size + 10), txt_bag, fill="black", font=f_bag)
 
     # 5. Logo
     try:
         l_url = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
-        logo = Image.open(io.BytesIO(requests.get(l_url).content)).convert("RGBA")
+        logo_res = requests.get(l_url, timeout=5)
+        logo = Image.open(io.BytesIO(logo_res.content)).convert("RGBA")
         lw = int(W * l_sc)
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
@@ -97,15 +107,19 @@ df = load_excel_data()
 ag_list = [str(i) for i in range(1, 56)]
 
 if df.empty:
-    st.error("Baza de date nu a putut fi încărcată.")
+    st.error("Baza de date nu a putut fi încărcată. Verifică link-ul Google Sheets.")
 else:
     cols = st.columns(3)
     imgs = []
 
     for i in range(3):
         with cols[i]:
-            br = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].unique()), key=f"br{i}")
-            md = st.selectbox(f"Model {i+1}", df[df['Brand'] == br]['Model'].unique(), key=f"md{i}")
+            br_list = sorted(df['Brand'].dropna().unique())
+            br = st.selectbox(f"Brand {i+1}", br_list, key=f"br{i}")
+            
+            md_list = sorted(df[df['Brand'] == br]['Model'].dropna().unique())
+            md = st.selectbox(f"Model {i+1}", md_list, key=f"md{i}")
+            
             row = df[(df['Brand'] == br) & (df['Model'] == md)].iloc[0]
             
             p_text = st.text_input(f"Preț {i+1}", "1500", key=f"pt{i}")
@@ -113,10 +127,10 @@ else:
             with c1: b_v = st.text_input(f"B {i+1}", "32511", key=f"bv{i}")
             with c2: a_v = st.selectbox(f"Ag {i+1}", ag_list, index=27, key=f"av{i}")
 
-            with st.expander("🎨 Setări", expanded=True):
-                fn = st.selectbox("Font", ["Open Sans", "Roboto", "Montserrat"], key=f"fn{i}")
+            with st.expander("🎨 Ajustări Fine", expanded=True):
+                fn = st.selectbox("Font", ["Open Sans", "Roboto", "Montserrat", "Lato", "Oswald"], key=f"fn{i}")
                 ps = st.slider("Mărime Preț", 20, 500, 80, key=f"ps{i}")
-                py = st.slider("Poziție Y Preț", 300, 900, 780, key=f"py{i}")
+                py = st.slider("Poziție Y Preț", 300, 950, 780, key=f"py{i}")
                 bs = st.slider("Mărime B@Ag", 10, 150, 35, key=f"bs{i}")
                 fs = st.slider("Mărime Specificații", 10, 80, 26, key=f"fs{i}")
                 ls = st.slider("Spațiu Rânduri", 20, 100, 40, key=f"ls{i}")
@@ -127,14 +141,22 @@ else:
             st.image(res_img, use_container_width=True)
             imgs.append(res_img)
 
-    if st.button("🚀 GENERARE PDF"):
+    st.divider()
+    if st.button("🚀 GENEREAZĂ PDF FINAL"):
         canvas = Image.new('RGB', (2400, 1200))
-        for idx, im in enumerate(imgs): canvas.paste(im, (idx * 800, 0))
+        for idx, im in enumerate(imgs):
+            canvas.paste(im, (idx * 800, 0))
+        
         pdf = FPDF(orientation='L', unit='mm', format='A4')
         pdf.add_page()
+        
         buf = io.BytesIO()
         canvas.save(buf, format='PNG')
         buf.seek(0)
-        with open("out.png", "wb") as f: f.write(buf.read())
-        pdf.image("out.png", x=5, y=5, w=287)
-        st.download_button("💾 Download PDF", pdf.output(dest='S').encode('latin-1'), "Etichete.pdf")
+        
+        # Salvăm temporar imaginea pentru a o insera în PDF
+        with open("final_labels.png", "wb") as f:
+            f.write(buf.read())
+        
+        pdf.image("final_labels.png", x=5, y=5, w=287)
+        st.download_button("💾 Descarcă PDF-ul", pdf.output(dest='S').encode('latin-1'), "Etichete_ExpressCredit.pdf", "application/pdf")
