@@ -15,7 +15,7 @@ COLOR_TEXT_GLOBAL = "#000000"  # NEGRU TOTAL
 st.set_page_config(page_title="ExpressCredit - Manual Liquid", layout="wide")
 
 # ==========================================
-# CSS - INTERFAȚĂ APPLE LIQUID
+# CSS - INTERFAȚĂ
 # ==========================================
 st.markdown(f"""
     <style>
@@ -23,49 +23,26 @@ st.markdown(f"""
         background-color: {COLOR_SITE_BG};
         color: {COLOR_TEXT_GLOBAL} !important;
     }}
-    
     h1, h2, h3, p, span, label, div {{
         color: {COLOR_TEXT_GLOBAL} !important;
     }}
-
     [data-testid="column"] {{
         background: rgba(255, 255, 255, 0.88);
         backdrop-filter: blur(15px);
         border-radius: 28px;
         padding: 25px !important;
-        border: 1px solid rgba(255,255,255,0.4);
         box-shadow: 0 12px 40px rgba(0,0,0,0.12);
         margin-bottom: 20px;
     }}
-
     .stTextInput input, .stSelectbox div[data-baseweb="select"], .stNumberInput input {{
         border-radius: 14px !important;
-        border: 1px solid rgba(0,0,0,0.2) !important;
         background-color: white !important;
-        color: {COLOR_TEXT_GLOBAL} !important;
     }}
-
     div.stButton > button {{
-        width: 100%;
-        background: #FFFFFF;
-        color: {COLOR_TEXT_GLOBAL} !important;
-        border: 2px solid {COLOR_TEXT_GLOBAL};
-        border-radius: 16px;
-        height: 4em;
-        font-weight: 800;
-        transition: all 0.3s ease;
+        width: 100%; background: #FFFFFF; color: black !important;
+        border: 2px solid black; border-radius: 16px; height: 4em; font-weight: 800;
     }}
-    
-    div.stButton > button:hover {{
-        background: {COLOR_TEXT_GLOBAL};
-        color: #FFFFFF !important;
-    }}
-
-    .stExpander {{
-        border: none !important;
-        background-color: rgba(255,255,255,0.4) !important;
-        border-radius: 16px !important;
-    }}
+    div.stButton > button:hover {{ background: black; color: white !important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -93,12 +70,12 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
     draw = ImageDraw.Draw(img)
     margine = 40
     
-    # --- VALORI BLOCATE (POZITIONARE FIXA) ---
-    PRET_Y_FIX = 810       # Pozitie verticala pret
-    PRET_SIZE_FIX = 50     # Dimensiune "Pret:" si "lei"
-    CIFRA_SIZE_FIX = 105   # Dimensiune cifra pret
-    B_AG_SIZE_FIX = 42     # Dimensiune cod B@Ag
-    # -----------------------------------------
+    # --- PARAMETRI BLOCAȚI (STRICT) ---
+    PRET_Y_FIX = 810       # Poziția pe verticală a prețului
+    PRET_SIZE_FIX = 50     # Mărimea textului "Pret:" și "lei"
+    CIFRA_SIZE_FIX = 105   # Mărimea cifrei mari a prețului
+    B_AG_SIZE_FIX = 42     # Mărimea codului B@Ag
+    # ----------------------------------
 
     # Fundalul alb rotunjit
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=90, fill="white")
@@ -107,23 +84,14 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
     f_bold_bytes = get_font_bytes(font_name, "Bold") or f_reg_bytes
     
     try:
-        if f_reg_bytes:
-            f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), titlu_size)
-            f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
-            f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
-            f_pret_text = ImageFont.truetype(io.BytesIO(f_bold_bytes), PRET_SIZE_FIX)
-            f_pret_cifra = ImageFont.truetype(io.BytesIO(f_bold_bytes), CIFRA_SIZE_FIX)
-            f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), B_AG_SIZE_FIX)
-        else:
-            path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-            f_titlu = ImageFont.truetype(path, titlu_size)
-            f_label = ImageFont.truetype(path, font_size)
-            f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-            f_pret_text = ImageFont.truetype(path, PRET_SIZE_FIX)
-            f_pret_cifra = ImageFont.truetype(path, CIFRA_SIZE_FIX)
-            f_bag = ImageFont.truetype(path, B_AG_SIZE_FIX)
+        f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), titlu_size)
+        f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
+        f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
+        f_pret_txt = ImageFont.truetype(io.BytesIO(f_bold_bytes), PRET_SIZE_FIX)
+        f_pret_num = ImageFont.truetype(io.BytesIO(f_bold_bytes), CIFRA_SIZE_FIX)
+        f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), B_AG_SIZE_FIX)
     except:
-        f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
+        f_titlu = f_label = f_valoare = f_pret_txt = f_pret_num = f_bag = ImageFont.load_default()
 
     # TITLU
     txt_brand = str(row['Brand'])
@@ -153,22 +121,26 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         draw.text((margine * 1.5 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
         y_pos += line_spacing
 
-    # PREȚ (BLOCAT)
+    # RUBRICA PREȚ (BLOCATĂ)
     if pret_val:
         t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
-        w1, w2, w3 = draw.textlength(t1, font=f_pret_text), draw.textlength(t2, font=f_pret_cifra), draw.textlength(t3, font=f_pret_text)
+        w1 = draw.textlength(t1, font=f_pret_txt)
+        w2 = draw.textlength(t2, font=f_pret_num)
+        w3 = draw.textlength(t3, font=f_pret_txt)
+        
         start_x = (W - (w1 + w2 + w3)) // 2
         y_base = PRET_Y_FIX
         
-        # Aliniere pe aceeasi linie de baza (baseline)
-        draw.text((start_x, y_base + (CIFRA_SIZE_FIX - PRET_SIZE_FIX) - 5), t1, fill="#000000", font=f_pret_text)
-        draw.text((start_x + w1, y_base), t2, fill="#000000", font=f_pret_cifra)
-        draw.text((start_x + w1 + w2, y_base + (CIFRA_SIZE_FIX - PRET_SIZE_FIX) - 5), t3, fill="#000000", font=f_pret_text)
+        draw.text((start_x, y_base + (CIFRA_SIZE_FIX - PRET_SIZE_FIX) - 5), t1, fill="#000000", font=f_pret_txt)
+        draw.text((start_x + w1, y_base), t2, fill="#000000", font=f_pret_num)
+        draw.text((start_x + w1 + w2, y_base + (CIFRA_SIZE_FIX - PRET_SIZE_FIX) - 5), t3, fill="#000000", font=f_pret_txt)
         
-        # RUBRICA B@Ag (BLOCATĂ ȘI CENTRATĂ)
+        # RUBRICA B@Ag (ALINIATĂ LA DREAPTA)
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text(((W - w_bag) // 2, y_base + CIFRA_SIZE_FIX + 15), txt_bag, fill="#333333", font=f_bag)
+        # Aliniere la dreapta folosind marginea etichetei
+        x_dreapta = W - (margine * 2) - w_bag
+        draw.text((x_dreapta, y_base + CIFRA_SIZE_FIX + 15), txt_bag, fill="#333333", font=f_bag)
 
     # LOGO
     try:
@@ -219,11 +191,10 @@ for i in range(3):
             ag_input = st.selectbox(f"Valoare Ag", ag_list, key=f"ag_{i}")
             f_size = st.number_input("Mărime Spec.", 10, 100, 28, key=f"sz_{i}")
 
-        with st.expander("🛠️ AJUSTARE DESIGN SPECIFICAȚII"):
+        with st.expander("🛠️ AJUSTARE DESIGN"):
             sp = st.slider("Spațiere rânduri", 10, 100, 42, key=f"sp_{i}")
             fn = st.selectbox("Font", FONT_NAMES, key=f"fn_{i}")
 
-        # Apelare functie cu parametrii fixati intern
         current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, fn, pret_input, b_input, ag_input, bat_choice, stoc_manual, ram_manual)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
