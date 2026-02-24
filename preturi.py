@@ -10,10 +10,10 @@ from fpdf import FPDF
 # ==========================================
 COLOR_SITE_BG = "#96c83f"      # Verdele lime pentru fundalul site-ului
 COLOR_ETICHETA_BG = "#cf1f2f"  # Roșul pentru bordura etichetei
-COLOR_TEXT_GLOBAL = "#000000"  # NEGRU TOTAL (SITE + ETICHETĂ)
+COLOR_TEXT_GLOBAL = "#000000"  # NEGRU TOTAL
 
 # Configurare pagină Streamlit
-st.set_page_config(page_title="ExpressCredit - Liquid Edition", layout="wide")
+st.set_page_config(page_title="ExpressCredit - Manual Liquid", layout="wide")
 
 # ==========================================
 # CSS - INTERFAȚĂ APPLE LIQUID
@@ -71,7 +71,7 @@ st.markdown(f"""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# CONSTANTE ȘI FUNCȚII GENERARE
+# CONSTANTE ȘI FUNCȚII
 # ==========================================
 STOCARE_OPTIUNI = ["8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
 RAM_OPTIUNI = ["1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB", "12 GB", "16 GB", "24 GB", "32 GB"]
@@ -88,7 +88,7 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val, stocare_val, ram_val):
+def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val, stocare_manuala, ram_manual):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
@@ -119,22 +119,20 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
     except:
         f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
-    # TITLU - BRAND ȘI MODEL
+    # TITLU
     txt_brand = str(row['Brand'])
     txt_model = str(row['Model'])
     draw.text(((W - draw.textlength(txt_brand, font=f_titlu)) // 2, margine * 2.5), txt_brand, fill="#000000", font=f_titlu)
     draw.text(((W - draw.textlength(txt_model, font=f_titlu)) // 2, margine * 2.5 + titlu_size), txt_model, fill="#000000", font=f_titlu)
 
-    # SPECIFICAȚII (Cu valorile noi pentru Stocare și RAM)
+    # SPECIFICAȚII (Stocare și RAM vin exclusiv din parametrii manuali)
     y_pos = margine * 10 
-    
-    # Construim lista de specificații manual pentru a include noile selectoare
     specs = [
         ("Display", row.get("Display", "-")),
         ("OS", row.get("OS", "-")),
         ("Procesor", row.get("Procesor", "-")),
-        ("Stocare", stocare_val),
-        ("RAM", ram_val),
+        ("Stocare", stocare_manuala),
+        ("RAM", ram_manual),
         ("Camera principala", row.get("Camera principala", "-")),
         ("Selfie", row.get("Selfie", "-")),
         ("Capacitate baterie", row.get("Capacitate baterie", "-")),
@@ -142,21 +140,19 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
     ]
 
     for label, val in specs:
-        text_label = f"{label}: "
-        text_val = str(val) if pd.notna(val) else "-"
-        draw.text((margine * 1.5, y_pos), text_label, fill="#333333", font=f_label)
-        offset = draw.textlength(text_label, font=f_label)
-        draw.text((margine * 1.5 + offset, y_pos), text_val, fill="#000000", font=f_valoare)
+        t_label = f"{label}: "
+        t_val = str(val) if pd.notna(val) else "-"
+        draw.text((margine * 1.5, y_pos), t_label, fill="#333333", font=f_label)
+        offset = draw.textlength(t_label, font=f_label)
+        draw.text((margine * 1.5 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
         y_pos += line_spacing
 
     # PREȚ
     if pret_val:
         t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
         w1, w2, w3 = draw.textlength(t1, font=f_pret_text), draw.textlength(t2, font=f_pret_cifra), draw.textlength(t3, font=f_pret_text)
-        total_w = w1 + w2 + w3
-        start_x = (W - total_w) // 2
+        start_x = (W - (w1 + w2 + w3)) // 2
         y_base = pret_y + cifra_size 
-        
         draw.text((start_x, y_base - pret_size), t1, fill="#000000", font=f_pret_text)
         draw.text((start_x + w1, y_base - cifra_size), t2, fill="#000000", font=f_pret_cifra)
         draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill="#000000", font=f_pret_text)
@@ -201,33 +197,29 @@ for i in range(3):
         model = st.selectbox(f"Model", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
         r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
         
-        # Detectare automată index pentru drop-down din datele Excel
-        def get_index(val, options):
-            val_str = str(val).strip() if pd.notna(val) else ""
-            if val_str in options: return options.index(val_str)
-            return 0
-
         c1, c2 = st.columns(2)
         with c1:
-            stocare_choice = st.selectbox("Stocare", STOCARE_OPTIUNI, index=get_index(r_data.get('Stocare'), STOCARE_OPTIUNI), key=f"stoc_{i}")
+            # Selecție manuală obligatorie STOCARE
+            stoc_manual = st.selectbox("Stocare", STOCARE_OPTIUNI, key=f"stoc_{i}")
             bat_choice = st.selectbox(f"Baterie %", battery_list, key=f"bat_{i}")
             b_input = st.text_input(f"Cod B", key=f"bt_{i}")
             t_size = st.number_input("Mărime Titlu", 10, 150, 48, key=f"tsz_{i}")
             
         with c2:
-            ram_choice = st.selectbox("RAM", RAM_OPTIUNI, index=get_index(r_data.get('RAM'), RAM_OPTIUNI), key=f"ram_{i}")
+            # Selecție manuală obligatorie RAM
+            ram_manual = st.selectbox("RAM", RAM_OPTIUNI, key=f"ram_{i}")
             pret_input = st.text_input(f"Preț Lei", key=f"pr_{i}")
             ag_input = st.selectbox(f"Valoare Ag", ag_list, key=f"ag_{i}")
             f_size = st.number_input("Mărime Spec.", 10, 100, 28, key=f"sz_{i}")
 
-        with st.expander("🛠️ AJUSTARE POZIȚIE TEXT"):
+        with st.expander("🛠️ AJUSTARE AVANSATĂ"):
             p_y = st.slider("Înălțime Preț", 400, 1150, 850, key=f"py_{i}")
             p_size = st.slider("Mărime 'Pret:'", 20, 150, 55, key=f"psz_{i}")
             c_size = st.number_input("Cifră Preț", 20, 300, 95, key=f"csz_{i}")
             sp = st.slider("Spațiere rânduri", 10, 100, 42, key=f"sp_{i}")
             fn = st.selectbox("Font", FONT_NAMES, key=f"fn_{i}")
 
-        current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice, stocare_choice, ram_choice)
+        current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice, stoc_manual, ram_manual)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
