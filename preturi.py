@@ -48,14 +48,13 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style, pret_val, pret_y, pret_size, b_text, ag_val, bat_val):
+def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, font_style, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
     margine = 40
     draw.rounded_rectangle([margine, margine, W-margine, H-220], radius=60, fill="white")
 
-    # Încercăm să luăm fontul ales, dacă nu, folosim un font scalabil de sistem
     f_reg_bytes = get_font_bytes(font_name, "Regular")
     f_bold_bytes = get_font_bytes(font_name, "Bold") or f_reg_bytes
     
@@ -64,21 +63,19 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), int(font_size * 1.3))
             f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
             f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
-            f_pret = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
+            f_pret_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
+            f_pret_cifra = ImageFont.truetype(io.BytesIO(f_bold_bytes), cifra_size)
             f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40)
         else:
-            # FALLBACK la font de sistem dacă Google Fonts e inaccesibil (pentru a permite resize)
-            try:
-                path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # Linux/Streamlit Cloud
-                f_titlu = ImageFont.truetype(path, int(font_size * 1.3))
-                f_label = ImageFont.truetype(path, font_size)
-                f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-                f_pret = ImageFont.truetype(path, pret_size)
-                f_bag = ImageFont.truetype(path, 40)
-            except:
-                f_titlu = f_label = f_valoare = f_pret = f_bag = ImageFont.load_default()
+            path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            f_titlu = ImageFont.truetype(path, int(font_size * 1.3))
+            f_label = ImageFont.truetype(path, font_size)
+            f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            f_pret_label = ImageFont.truetype(path, pret_size)
+            f_pret_cifra = ImageFont.truetype(path, cifra_size)
+            f_bag = ImageFont.truetype(path, 40)
     except:
-        f_titlu = f_label = f_valoare = f_pret = f_bag = ImageFont.load_default()
+        f_titlu = f_label = f_valoare = f_pret_label = f_pret_cifra = f_bag = ImageFont.load_default()
 
     # Model
     txt_m = f"{row['Brand']} {row['Model']}"
@@ -96,22 +93,32 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             draw.text((margine * 2 + offset, y_pos), val, fill="black", font=f_valoare)
             y_pos += line_spacing
 
-    # Sănătate Baterie Manuală
+    # Sănătate Baterie
     label_bat = "Sanatate baterie:"
     draw.text((margine * 2, y_pos), label_bat, fill="black", font=f_label)
     offset_bat = draw.textlength(f"{label_bat} ", font=f_label)
     draw.text((margine * 2 + offset_bat, y_pos), f"{bat_val}%", fill="black", font=f_valoare)
 
-    # --- TEXT PREȚ ---
+    # --- TEXT PREȚ (DOUĂ REGLAJE) ---
     if pret_val:
-        txt_p = f"Pret: {pret_val} lei"
-        w_p = draw.textlength(txt_p, font=f_pret)
-        draw.text(((W - w_p) // 2, pret_y), txt_p, fill=(204, 9, 21), font=f_pret)
+        txt_label = "Pret: "
+        txt_cifra = f"{pret_val} lei"
         
-        # --- RUBRICA B@Ag (Font 40) ---
+        w_label = draw.textlength(txt_label, font=f_pret_label)
+        w_cifra = draw.textlength(txt_cifra, font=f_pret_cifra)
+        total_w = w_label + w_cifra
+        
+        start_x = (W - total_w) // 2
+        # Desenăm "Pret: "
+        draw.text((start_x, pret_y), txt_label, fill=(204, 9, 21), font=f_pret_label)
+        # Desenăm cifra (cu mărimea ei separată)
+        # Ajustăm y-ul cifrei pentru a fi aliniată la bază cu textul
+        draw.text((start_x + w_label, pret_y - (cifra_size - pret_size)//1.5), txt_cifra, fill=(204, 9, 21), font=f_pret_cifra)
+        
+        # --- RUBRICA B@Ag ---
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text((W - margine * 2 - w_bag, pret_y + pret_size + 10), txt_bag, fill="black", font=f_bag)
+        draw.text((W - margine * 2 - w_bag, pret_y + max(pret_size, cifra_size) + 10), txt_bag, fill="black", font=f_bag)
 
     # Logo
     try:
@@ -145,38 +152,38 @@ battery_list = [str(i) for i in range(100, 0, -1)]
 
 for i in range(3):
     with cols[i]:
-        brand = st.selectbox(f"Brand Telefon {i+1}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
-        model = st.selectbox(f"Model Telefon {i+1}", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
+        brand = st.selectbox(f"Brand {i+1}", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
+        model = st.selectbox(f"Model {i+1}", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
         r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
         
-        bat_choice = st.selectbox(f"Sănătate Baterie % {i+1}", battery_list, index=0, key=f"bat_{i}")
-        pret_input = st.text_input(f"Pret Telefon {i+1}", value="", key=f"pr_{i}", placeholder="Ex: 1500")
+        bat_choice = st.selectbox(f"Baterie % {i+1}", battery_list, index=0, key=f"bat_{i}")
+        pret_input = st.text_input(f"Pret {i+1}", value="", key=f"pr_{i}")
         
         sub_c1, sub_c2 = st.columns(2)
         with sub_c1:
-            b_input = st.text_input(f"Text B {i+1}", value="", key=f"bt_{i}", placeholder="cod")
+            b_input = st.text_input(f"B {i+1}", key=f"bt_{i}")
         with sub_c2:
-            ag_input = st.selectbox(f"Ag {i+1}", ag_list, index=0, key=f"ag_{i}")
+            ag_input = st.selectbox(f"Ag {i+1}", ag_list, key=f"ag_{i}")
 
         with st.expander("⚙️ CONFIGURARE AVANSATĂ", expanded=False):
-            fn = st.selectbox("ALEGE FONT", FONT_NAMES, key=f"fn_{i}")
-            size = st.slider("MĂRIME FONT SPEC.", 10, 150, 30, key=f"sz_{i}") # Am mărit limita la 150
-            sp = st.slider("SPAȚIERE RÂNDURI", 10, 150, 38, key=f"sp_{i}")
+            fn = st.selectbox("FONT", FONT_NAMES, key=f"fn_{i}")
+            size = st.slider("FONT SPEC.", 10, 150, 30, key=f"sz_{i}")
+            sp = st.slider("SPAȚIERE", 10, 150, 38, key=f"sp_{i}")
             
             st.markdown("---")
-            p_size = st.slider("MĂRIME TEXT PREȚ", 20, 250, 60, key=f"psz_{i}")
+            p_size = st.slider("MĂRIME TEXT 'PRET:'", 20, 150, 60, key=f"psz_{i}")
+            c_size = st.slider("MĂRIME CIFRĂ PREȚ", 20, 250, 80, key=f"csz_{i}") # Slider nou adaugat aici
             p_y = st.slider("POZIȚIE Y PREȚ", 400, 1150, 850, key=f"py_{i}")
             
             st.markdown("---")
             ls = st.slider("SCARĂ LOGO", 0.1, 2.0, 0.7, key=f"ls_{i}")
-            lx = st.number_input("X Logo (100=Centrat)", 0, 800, 100, key=f"lx_{i}")
+            lx = st.number_input("X Logo", 0, 800, 100, key=f"lx_{i}")
             ly = st.number_input("Y Logo", 0, 1200, 1050, key=f"ly_{i}")
 
-        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, "Bold", pret_input, p_y, p_size, b_input, ag_input, bat_choice)
+        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, "Bold", pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
-# --- GENERARE PDF ---
 st.divider()
 if st.button("🚀 GENEREAZĂ PDF FINAL"):
     canvas = Image.new('RGB', (2400, 1200))
