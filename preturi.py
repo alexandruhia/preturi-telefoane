@@ -64,14 +64,14 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
             f_valoare = ImageFont.truetype(io.BytesIO(f_bytes), font_size)
             f_pret = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
-            f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 50) # Font fixat la 50
+            f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40) # Font setat la 40
         else:
             path_b = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
             f_titlu = ImageFont.truetype(path_b, int(font_size * 1.3))
             f_label = ImageFont.truetype(path_b, font_size)
             f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
             f_pret = ImageFont.truetype(path_b, pret_size)
-            f_bag = ImageFont.truetype(path_b, 50)
+            f_bag = ImageFont.truetype(path_b, 40)
     except:
         f_titlu = f_label = f_valoare = f_pret = f_bag = ImageFont.load_default()
 
@@ -141,7 +141,7 @@ for i in range(3):
         # Secțiune Preț dedicată
         pret_input = st.text_input(f"Pret Telefon {i+1}", value="", key=f"pr_{i}", placeholder="Ex: 1500")
         
-        # Secțiune B@Ag adăugată sub preț conform cerinței
+        # Secțiune B@Ag
         sub_c1, sub_c2 = st.columns(2)
         with sub_c1:
             b_input = st.text_input(f"Text B {i+1}", value="", key=f"bt_{i}", placeholder="cod")
