@@ -6,7 +6,7 @@ import requests
 from fpdf import FPDF
 
 # Configurare pagină
-st.set_page_config(page_title="ExpressCredit Pro - Open Sans Bold", layout="wide")
+st.set_page_config(page_title="ExpressCredit Pro - Right Align", layout="wide")
 
 # CSS pentru aspect profesional
 st.markdown("""
@@ -21,13 +21,12 @@ st.markdown("""
 
 # --- LISTĂ FONTURI ---
 FONT_URLS = {
-    "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-",
     "Open Sans": "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-",
+    "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-",
     "Montserrat": "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-",
     "Bebas Neue": "https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-",
     "Anton": "https://github.com/google/fonts/raw/main/ofl/anton/Anton-",
     "Oswald": "https://github.com/google/fonts/raw/main/ofl/oswald/Oswald-",
-    "Caveat": "https://github.com/google/fonts/raw/main/ofl/caveat/Caveat-"
 }
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -35,7 +34,6 @@ def get_font_safe(name, style):
     base = FONT_URLS.get(name)
     if base:
         try:
-            # Încercăm varianta specificată (Regular/Bold/etc)
             r = requests.get(f"{base}{style}.ttf", timeout=2)
             if r.status_code == 200: return r.content
         except: pass
@@ -47,11 +45,9 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([40, 40, 760, 980], radius=60, fill="white")
 
-    # Fonturi dinamice pentru specificații și preț
+    # Fonturi
     f_data = get_font_safe(f_name, f_style)
     f_bold_data = get_font_safe(f_name, "Bold") or f_data
-    
-    # --- FONT SPECIAL PENTRU RUBRICA B (Open Sans Bold 30pt) ---
     open_sans_bold = get_font_safe("Open Sans", "Bold")
     
     try:
@@ -65,15 +61,14 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
             f_titlu = f_label = f_pret = ImageFont.truetype(path, f_size)
             f_valoare = ImageFont.load_default()
 
-        # Instanțiere Open Sans Bold 30pt pentru B @ Ag
         if open_sans_bold:
             f_b_ag = ImageFont.truetype(io.BytesIO(open_sans_bold), 30)
         else:
-            f_b_ag = f_label # Fallback dacă Open Sans nu se încarcă
+            f_b_ag = f_label
     except:
         f_titlu = f_label = f_valoare = f_pret = f_b_ag = ImageFont.load_default()
 
-    # Model
+    # Model (Centrat)
     txt_m = f"{row['Brand']} {row['Model']}"
     w_m = draw.textlength(txt_m, font=f_titlu)
     draw.text(((W - w_m) // 2, 120), txt_m, fill=(0, 51, 102), font=f_titlu)
@@ -89,17 +84,17 @@ def creeaza_imagine_eticheta(row, f_size, l_space, l_scale, l_y, f_name, f_style
             draw.text((80 + off, y_p), val, fill="black", font=f_valoare)
             y_p += l_space
 
-    # Preț
+    # Preț (Centrat)
     if pret:
         txt_p = f"Pret: {pret} lei"
         w_p = draw.textlength(txt_p, font=f_pret)
         draw.text(((W - w_p) // 2, py), txt_p, fill=(204, 9, 21), font=f_pret)
 
-    # --- RUBRICA B @ Ag (Fix: Open Sans Bold, 30pt) ---
-    txt_bag = f"B: {b_val} @ {ag_val}"
+    # --- RUBRICA Btext@text (Fix: 30pt Bold, ALINIAT DREAPTA) ---
+    txt_bag = f"B{b_val}@{ag_val}"
     w_bag = draw.textlength(txt_bag, font=f_b_ag)
-    # Poziție fixă deasupra logo-ului
-    draw.text(((W - w_bag) // 2, 920), txt_bag, fill="black", font=f_b_ag)
+    # Poziționare: Marginea din dreapta (760) minus lățimea textului minus un mic padding (20)
+    draw.text((720 - w_bag, 920), txt_bag, fill="black", font=f_b_ag)
 
     # Logo
     try:
@@ -120,7 +115,9 @@ except:
     st.error("⚠️ Baza de date inaccesibilă.")
     st.stop()
 
-ag_list = [f"Ag{i}" for i in range(1, 53)]
+# Listă agenții doar cu cifre (1-52)
+ag_numbers = [str(i) for i in range(1, 53)]
+
 col_p = st.columns(3)
 final_imgs = []
 
@@ -130,17 +127,17 @@ for i in range(3):
         m = st.selectbox(f"Model {i+1}", df[df['Brand'] == b]['Model'].unique(), key=f"m{i}")
         row = df[(df['Brand'] == b) & (df['Model'] == m)].iloc[0]
         
-        pr = st.text_input(f"Preț Telefon {i+1}", key=f"p{i}")
+        pr = st.text_input(f"Preț (lei)", key=f"p{i}", placeholder="1500")
         c1, c2 = st.columns(2)
-        with c1: b_v = st.text_input("B:", key=f"bv{i}")
-        with c2: a_v = st.selectbox("@Ag", ag_list, key=f"av{i}")
+        with c1: b_v = st.text_input("B (Cifre):", key=f"bv{i}", placeholder="32511")
+        with c2: a_v = st.selectbox("Agenție (@):", ag_numbers, index=27, key=f"av{i}") # Default 28
 
         with st.expander("🎨 Ajustări Design"):
-            fn = st.selectbox("Font Spec.", list(FONT_URLS.keys()), index=1, key=f"fn{i}") # Default Open Sans
-            fs = st.slider("Mărime Specificații", 10, 80, 25, key=f"fs{i}")
+            fn = st.selectbox("Font Spec.", list(FONT_URLS.keys()), index=0, key=f"fn{i}")
+            fs = st.slider("Mărime Text", 10, 80, 25, key=f"fs{i}")
             ls = st.slider("Spațiu Rânduri", 10, 80, 35, key=f"ls{i}")
             psize = st.slider("Mărime Preț", 20, 150, 70, key=f"ps{i}")
-            py_pos = st.slider("Poziție Y Preț", 600, 920, 820, key=f"py{i}")
+            py_pos = st.slider("Y Preț", 600, 920, 820, key=f"py{i}")
             lsc = st.slider("Logo Scara", 0.1, 1.5, 0.7, key=f"lc{i}")
             l_y = st.slider("Y Logo", 900, 1150, 1050, key=f"ly{i}")
 
