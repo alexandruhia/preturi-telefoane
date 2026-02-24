@@ -85,7 +85,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     offset_bat = draw.textlength(f"{label_bat} ", font=f_label)
     draw.text((margine * 2 + offset_bat, y_pos), f"{bat_val}%", fill="black", font=f_valoare)
 
-    # --- ZONA PREȚ (3 ELEMENTE) ---
+    # --- ZONA PREȚ ALINIATĂ LA BAZĂ ---
     if pret_val:
         t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
         w1 = draw.textlength(t1, font=f_pret_text)
@@ -95,17 +95,20 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
         total_w = w1 + w2 + w3
         start_x = (W - total_w) // 2
         
-        # Aliniere verticală la bază pentru textul "Pret:" și "lei" față de cifra mai mare
-        y_offset_text = pret_y + (cifra_size - pret_size) * 0.15 
+        # Determinăm punctul cel mai de jos (baza) folosind cifra care este de obicei cea mai mare
+        # y_base este linia de jos pe care se așază textul
+        y_base = pret_y + cifra_size 
         
-        draw.text((start_x, y_offset_text), t1, fill=(204, 9, 21), font=f_pret_text)
-        draw.text((start_x + w1, pret_y), t2, fill=(204, 9, 21), font=f_pret_cifra)
-        draw.text((start_x + w1 + w2, y_offset_text), t3, fill=(204, 9, 21), font=f_pret_text)
+        # Aliniere: scădem înălțimea fontului curent din y_base
+        # Astfel, indiferent de mărime, "podeaua" rămâne aceeași
+        draw.text((start_x, y_base - pret_size), t1, fill=(204, 9, 21), font=f_pret_text)
+        draw.text((start_x + w1, y_base - cifra_size), t2, fill=(204, 9, 21), font=f_pret_cifra)
+        draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill=(204, 9, 21), font=f_pret_text)
         
         # Rubrica B@Ag
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text((W - margine * 2 - w_bag, pret_y + max(pret_size, cifra_size) + 10), txt_bag, fill="black", font=f_bag)
+        draw.text((W - margine * 2 - w_bag, y_base + 20), txt_bag, fill="black", font=f_bag)
 
     # Logo
     try:
@@ -130,7 +133,8 @@ df = load_data()
 st.sidebar.header("🔍 CONTROL VIZUAL")
 zoom = st.sidebar.slider("Lățime Previzualizare", 200, 1000, 400)
 
-FONT_NAMES = ["Roboto", "Montserrat", "Open Sans", "Lato", "Oswald", "Raleway", "Ubuntu", "Poppins"]
+# Listă extinsă de fonturi pentru diversitate
+FONT_NAMES = ["Roboto", "Montserrat", "Open Sans", "Lato", "Oswald", "Raleway", "Ubuntu", "Poppins", "Bebas Neue", "Anton"]
 
 col1, col2, col3 = st.columns(3)
 cols = [col1, col2, col3]
@@ -161,8 +165,8 @@ for i in range(3):
             
             st.markdown("---")
             p_size = st.slider("MĂRIME TEXT (Pret/lei)", 20, 150, 60, key=f"psz_{i}")
-            c_size = st.slider("MĂRIME CIFRE PREȚ", 20, 250, 80, key=f"csz_{i}")
-            p_y = st.slider("POZIȚIE Y PREȚ", 400, 1150, 850, key=f"py_{i}")
+            c_size = st.slider("MĂRIME CIFRE PREȚ", 20, 300, 80, key=f"csz_{i}")
+            p_y = st.slider("POZIȚIE Y (ORIZONTALA BAZĂ)", 400, 1150, 850, key=f"py_{i}")
             
             st.markdown("---")
             ls = st.slider("SCARĂ LOGO", 0.1, 2.0, 0.7, key=f"ls_{i}")
