@@ -157,19 +157,20 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         w_bag = draw.textlength(txt_bag, font=f_bag)
         draw.text((W - margine * 4 - w_bag, y_base + 35), txt_bag, fill="#333333", font=f_bag)
 
-    # LOGO BLOCAT (Fixat jos, centrat)
+    # LOGO BLOCAT (Ajustat: Mai Mare și Mai Sus)
     try:
         url_l = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
         logo_resp = requests.get(url_l, timeout=5)
         logo = Image.open(io.BytesIO(logo_resp.content)).convert("RGBA")
         
-        # Setări logo fixate
-        lw = int(W * 0.6) # Lățime fixă 60% din etichetă
+        # LOGO MAI MARE: Creștem la 80% din lățimea etichetei
+        lw = int(W * 0.8) 
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
         
         x_logo = (W - lw) // 2
-        y_logo = 1060 # Poziție fixă în partea de jos a etichetei
+        # LOGO MAI SUS: Am schimbat de la 1060 la 1010
+        y_logo = 1010 
         img.paste(logo, (x_logo, y_logo), logo)
     except:
         pass
@@ -222,7 +223,6 @@ for i in range(3):
 
 st.markdown("---")
 if st.button("🚀 GENEREAZĂ PDF FINAL"):
-    # Creare canvas pentru print (3 etichete una lângă alta)
     canvas = Image.new('RGB', (2400, 1200))
     for i in range(3): 
         canvas.paste(final_imgs[i], (i * 800, 0))
@@ -234,7 +234,6 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     canvas.save(buf, format='PNG')
     buf.seek(0)
     
-    # Salvare temporară pentru PDF
     with open("temp_print.png", "wb") as f: 
         f.write(buf.read())
         
