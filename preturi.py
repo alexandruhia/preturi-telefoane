@@ -150,7 +150,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         t_val = str(val) if pd.notna(val) else "-"
         draw.text((margine * 1.5, y_pos), t_label, fill="#333333", font=f_label)
         offset = draw.textlength(t_label, font=f_label)
-        draw.text((margine * 2 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
+        draw.text((margine * 1.5 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
         y_pos += line_spacing
 
     # PREȚ (BLOCAT)
@@ -168,7 +168,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         # RUBRICA B@Ag (BLOCATĂ ȘI CENTRATĂ)
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text(((W - w_bag) // 0.5, y_base + CIFRA_SIZE_FIX + 15), txt_bag, fill="#333333", font=f_bag)
+        draw.text(((W - w_bag) // 2, y_base + CIFRA_SIZE_FIX + 15), txt_bag, fill="#333333", font=f_bag)
 
     # LOGO
     try:
@@ -248,7 +248,3 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf_output = pdf.output(dest='S').encode('latin-1')
     
     st.download_button("💾 DESCARCĂ PDF", pdf_output, "Etichete.pdf", "application/pdf")
-
-
-
-
