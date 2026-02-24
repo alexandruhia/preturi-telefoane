@@ -8,9 +8,9 @@ from fpdf import FPDF
 # ==========================================
 # CONFIGURARE CULORI BRAND
 # ==========================================
-COLOR_SITE_BG = "#96c83f"      # Verdele pentru fundalul site-ului
-COLOR_ETICHETA_BG = "#cf1f2f"  # Roșul pentru etichetă (print)
-COLOR_TEXT_GLOBAL = "#000000"  # NEGRU TOTAL PENTRU TOT SITE-UL
+COLOR_SITE_BG = "#96c83f"      # Verdele lime pentru fundalul site-ului
+COLOR_ETICHETA_BG = "#cf1f2f"  # Roșul pentru bordura etichetei
+COLOR_TEXT_GLOBAL = "#000000"  # NEGRU TOTAL (SITE + ETICHETĂ)
 
 # Configurare pagină Streamlit
 st.set_page_config(page_title="ExpressCredit - Liquid Edition", layout="wide")
@@ -20,18 +20,15 @@ st.set_page_config(page_title="ExpressCredit - Liquid Edition", layout="wide")
 # ==========================================
 st.markdown(f"""
     <style>
-    /* Fundalul principal și forțare culoare text negru peste tot */
     .stApp {{
         background-color: {COLOR_SITE_BG};
         color: {COLOR_TEXT_GLOBAL} !important;
     }}
     
-    /* Forțare text negru pentru toate elementele de interfață */
     h1, h2, h3, p, span, label, div {{
         color: {COLOR_TEXT_GLOBAL} !important;
     }}
 
-    /* Cardurile pentru etichete */
     [data-testid="column"] {{
         background: rgba(255, 255, 255, 0.88);
         backdrop-filter: blur(15px);
@@ -42,16 +39,13 @@ st.markdown(f"""
         margin-bottom: 20px;
     }}
 
-    /* Input-uri cu text negru */
     .stTextInput input, .stSelectbox div[data-baseweb="select"], .stNumberInput input {{
         border-radius: 14px !important;
         border: 1px solid rgba(0,0,0,0.2) !important;
         background-color: white !important;
         color: {COLOR_TEXT_GLOBAL} !important;
-        height: 45px;
     }}
 
-    /* Butonul de Generare - Text Negru pe alb/gri deschis pentru contrast */
     div.stButton > button {{
         width: 100%;
         background: #FFFFFF;
@@ -60,8 +54,6 @@ st.markdown(f"""
         border-radius: 16px;
         height: 4em;
         font-weight: 800;
-        letter-spacing: 0.5px;
-        transition: all 0.3s ease;
     }}
     
     div.stButton > button:hover {{
@@ -69,17 +61,10 @@ st.markdown(f"""
         color: #FFFFFF !important;
     }}
 
-    /* Expander cu text negru */
     .stExpander {{
         border: none !important;
         background-color: rgba(255,255,255,0.4) !important;
         border-radius: 16px !important;
-    }}
-
-    /* Slidere cu text negru */
-    .stSlider label {{
-        color: {COLOR_TEXT_GLOBAL} !important;
-        font-weight: bold !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -128,12 +113,12 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     except:
         f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
-    # Brand & Model
+    # Brand & Model - Negru
     txt_m = f"{row['Brand']} {row['Model']}"
     w_m = draw.textlength(txt_m, font=f_titlu)
     draw.text(((W - w_m) // 2, margine * 4), txt_m, fill="#000000", font=f_titlu)
 
-    # Specificații
+    # Specificații - Negru
     y_pos = margine * 8.5
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Capacitate baterie"]
     for col in specs:
@@ -148,6 +133,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
     offset_bat = draw.textlength("Sanatate baterie: ", font=f_label)
     draw.text((margine * 3 + offset_bat, y_pos), f"{bat_val}%", fill="#000000", font=f_valoare)
 
+    # PREȚ - MODIFICAT ÎN NEGRU
     if pret_val:
         t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
         w1, w2, w3 = draw.textlength(t1, font=f_pret_text), draw.textlength(t2, font=f_pret_cifra), draw.textlength(t3, font=f_pret_text)
@@ -155,9 +141,10 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, 
         start_x = (W - total_w) // 2
         y_base = pret_y + cifra_size 
         
-        draw.text((start_x, y_base - pret_size), t1, fill=COLOR_ETICHETA_BG, font=f_pret_text)
-        draw.text((start_x + w1, y_base - cifra_size), t2, fill=COLOR_ETICHETA_BG, font=f_pret_cifra)
-        draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill=COLOR_ETICHETA_BG, font=f_pret_text)
+        # Aici am schimbat fill din COLOR_ETICHETA_BG în #000000
+        draw.text((start_x, y_base - pret_size), t1, fill="#000000", font=f_pret_text)
+        draw.text((start_x + w1, y_base - cifra_size), t2, fill="#000000", font=f_pret_cifra)
+        draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill="#000000", font=f_pret_text)
         
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
