@@ -13,7 +13,7 @@ st.markdown("""
     <style>
     [data-testid="column"] { padding: 5px !important; }
     .stSlider label, .stSelectbox label, .stNumberInput label, .stTextInput label {
-        font-size: 20px !important;
+        font-size: 18px !important;
         font-weight: 800 !important;
         color: #000000 !important;
     }
@@ -34,7 +34,7 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
+def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, l_scale, l_x_manual, l_y, font_name, pret_val, pret_y, pret_size, cifra_size, b_text, ag_val, bat_val):
     W, H = 800, 1200
     img = Image.new('RGB', (W, H), color=(204, 9, 21))
     draw = ImageDraw.Draw(img)
@@ -46,7 +46,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     
     try:
         if f_reg_bytes:
-            f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), int(font_size * 1.3))
+            f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), titlu_size)
             f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
             f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
             f_pret_text = ImageFont.truetype(io.BytesIO(f_bold_bytes), pret_size)
@@ -54,7 +54,7 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
             f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), 40)
         else:
             path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-            f_titlu = ImageFont.truetype(path, int(font_size * 1.3))
+            f_titlu = ImageFont.truetype(path, titlu_size)
             f_label = ImageFont.truetype(path, font_size)
             f_valoare = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
             f_pret_text = ImageFont.truetype(path, pret_size)
@@ -63,12 +63,12 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
     except:
         f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
-    # Model
+    # Titlu (Brand + Model) - Controlat de titlu_size
     txt_m = f"{row['Brand']} {row['Model']}"
     w_m = draw.textlength(txt_m, font=f_titlu)
     draw.text(((W - w_m) // 2, margine * 3), txt_m, fill=(0, 51, 102), font=f_titlu)
 
-    # Specificații
+    # Specificații - Controlate de font_size
     y_pos = margine * 7.5
     specs = ["Display", "OS", "Procesor", "Stocare", "RAM", "Camera principala", "Selfie", "Capacitate baterie"]
     for col in specs:
@@ -94,18 +94,12 @@ def creeaza_imagine_eticheta(row, font_size, line_spacing, l_scale, l_x_manual, 
         
         total_w = w1 + w2 + w3
         start_x = (W - total_w) // 2
-        
-        # Determinăm punctul cel mai de jos (baza) folosind cifra care este de obicei cea mai mare
-        # y_base este linia de jos pe care se așază textul
         y_base = pret_y + cifra_size 
         
-        # Aliniere: scădem înălțimea fontului curent din y_base
-        # Astfel, indiferent de mărime, "podeaua" rămâne aceeași
         draw.text((start_x, y_base - pret_size), t1, fill=(204, 9, 21), font=f_pret_text)
         draw.text((start_x + w1, y_base - cifra_size), t2, fill=(204, 9, 21), font=f_pret_cifra)
         draw.text((start_x + w1 + w2, y_base - pret_size), t3, fill=(204, 9, 21), font=f_pret_text)
         
-        # Rubrica B@Ag
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
         draw.text((W - margine * 2 - w_bag, y_base + 20), txt_bag, fill="black", font=f_bag)
@@ -133,15 +127,13 @@ df = load_data()
 st.sidebar.header("🔍 CONTROL VIZUAL")
 zoom = st.sidebar.slider("Lățime Previzualizare", 200, 1000, 400)
 
-# Listă extinsă de fonturi pentru diversitate
 FONT_NAMES = ["Roboto", "Montserrat", "Open Sans", "Lato", "Oswald", "Raleway", "Ubuntu", "Poppins", "Bebas Neue", "Anton"]
+ag_list = [str(i) for i in range(1, 56)]
+battery_list = [str(i) for i in range(100, 0, -1)]
 
 col1, col2, col3 = st.columns(3)
 cols = [col1, col2, col3]
 final_imgs = []
-
-ag_list = [str(i) for i in range(1, 56)]
-battery_list = [str(i) for i in range(100, 0, -1)]
 
 for i in range(3):
     with cols[i]:
@@ -153,27 +145,27 @@ for i in range(3):
         pret_input = st.text_input(f"Pret {i+1}", value="", key=f"pr_{i}")
         
         sub_c1, sub_c2 = st.columns(2)
-        with sub_c1:
-            b_input = st.text_input(f"B {i+1}", key=f"bt_{i}")
-        with sub_c2:
-            ag_input = st.selectbox(f"Ag {i+1}", ag_list, key=f"ag_{i}")
+        with sub_c1: b_input = st.text_input(f"B {i+1}", key=f"bt_{i}")
+        with sub_c2: ag_input = st.selectbox(f"Ag {i+1}", ag_list, key=f"ag_{i}")
 
         with st.expander("⚙️ CONFIGURARE AVANSATĂ", expanded=False):
             fn = st.selectbox("FONT", FONT_NAMES, key=f"fn_{i}")
-            size = st.slider("FONT SPEC.", 10, 100, 30, key=f"sz_{i}")
-            sp = st.slider("SPAȚIERE", 10, 100, 38, key=f"sp_{i}")
+            # --- SLIDERE SEPARATE ---
+            t_size = st.slider("MĂRIME TITLU (BRAND/MODEL)", 10, 150, 40, key=f"tsz_{i}")
+            f_size = st.slider("MĂRIME FONT SPECIFICAȚII", 10, 100, 30, key=f"sz_{i}")
+            sp = st.slider("SPAȚIERE RÂNDURI", 10, 100, 38, key=f"sp_{i}")
             
             st.markdown("---")
             p_size = st.slider("MĂRIME TEXT (Pret/lei)", 20, 150, 60, key=f"psz_{i}")
             c_size = st.slider("MĂRIME CIFRE PREȚ", 20, 300, 80, key=f"csz_{i}")
-            p_y = st.slider("POZIȚIE Y (ORIZONTALA BAZĂ)", 400, 1150, 850, key=f"py_{i}")
+            p_y = st.slider("POZIȚIE Y PREȚ (BAZĂ)", 400, 1150, 850, key=f"py_{i}")
             
             st.markdown("---")
             ls = st.slider("SCARĂ LOGO", 0.1, 2.0, 0.7, key=f"ls_{i}")
             lx = st.number_input("X Logo", 0, 800, 100, key=f"lx_{i}")
             ly = st.number_input("Y Logo", 0, 1200, 1050, key=f"ly_{i}")
 
-        current_img = creeaza_imagine_eticheta(r_data, size, sp, ls, lx, ly, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
+        current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, ls, lx, ly, fn, pret_input, p_y, p_size, c_size, b_input, ag_input, bat_choice)
         st.image(current_img, width=zoom)
         final_imgs.append(current_img)
 
