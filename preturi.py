@@ -155,7 +155,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         
         txt_bag = f"B{b_text}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text((W - margine * 4 - w_bag, y_base + 35), txt_bag, fill="#333333", font=f_bag)
+        draw.text((W - margine * 2 - w_bag, y_base + 35), txt_bag, fill="#333333", font=f_bag)
 
     # LOGO BLOCAT (MAI MARE ȘI MAI SUS)
     try:
@@ -241,4 +241,5 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf_output = pdf.output(dest='S').encode('latin-1')
     
     st.download_button("💾 DESCARCĂ PDF", pdf_output, "Etichete.pdf", "application/pdf")
+
 
