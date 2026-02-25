@@ -178,7 +178,7 @@ def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name
         lw = int(W * 0.85) 
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
-        img.paste(logo, ((W - lw) // 2, 1000), logo)
+        img.paste(logo, ((W - lw) // 2, 870), logo)
     except: pass
         
     return img
@@ -248,3 +248,4 @@ if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf_output = pdf.output(dest='S').encode('latin-1')
     
     st.download_button("💾 DESCARCĂ PDF", pdf_output, "Etichete.pdf", "application/pdf")
+
