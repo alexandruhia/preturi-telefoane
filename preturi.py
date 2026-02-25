@@ -12,7 +12,7 @@ COLOR_SITE_BG = "#96c83f"
 COLOR_ETICHETA_BG = "#cf1f2f"
 COLOR_TEXT_GLOBAL = "#000000"
 
-st.set_page_config(page_title="ExpressCredit - Nano Edition", layout="wide")
+st.set_page_config(page_title="ExpressCredit - Full Specs Nano", layout="wide")
 
 # ==========================================
 # CSS - INTERFAȚĂ
@@ -49,20 +49,19 @@ def get_font_bytes(font_name, weight):
     return None
 
 def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag_val, bat_val, stoc_man, ram_man):
-    # PÂNZĂ ULTRA-COMPACTĂ: 256x464 pixeli
-    W, H = 256, 464 
+    # Pânză optimizată pentru font mare dar cu spațiu de specs
+    W, H = 256, 520 
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
     margine_ext = 10
     
-    # Fundal alb rotunjit
-    draw.rounded_rectangle([margine_ext, margine_ext, W-margine_ext, H-70], radius=20, fill="white")
+    # Fundal alb
+    draw.rounded_rectangle([margine_ext, margine_ext, W-margine_ext, H-80], radius=20, fill="white")
 
     f_bytes_reg = get_font_bytes(font_name, "Regular")
     f_bytes_bold = get_font_bytes(font_name, "Bold") or f_bytes_reg
     
     try:
-        # Paranteze închise corect pentru a preveni SyntaxError
         f_titlu = ImageFont.truetype(io.BytesIO(f_bytes_bold), t_size)
         f_label = ImageFont.truetype(io.BytesIO(f_bytes_bold), f_size)
         f_valoare = ImageFont.truetype(io.BytesIO(f_bytes_reg), f_size)
@@ -79,12 +78,16 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
         draw.text(((W - w_txt) // 2, y_ptr), txt, fill="#000000", font=f_titlu)
         y_ptr += t_size + 2
 
-    # --- SPECIFICAȚII ---
+    # --- TOATE SPECIFICAȚIILE REINTRODUSE ---
     y_ptr += 10 
     specs = [
+        ("Display", row.get("Display", "-")),
+        ("OS", row.get("OS", "-")),
         ("Stocare", stoc_man),
         ("RAM", ram_man),
-        ("Baterie", f"{bat_val}%")
+        ("Camera", row.get("Camera principala", "-")),
+        ("Baterie", row.get("Capacitate baterie", "-")),
+        ("Sanatate", f"{bat_val}%")
     ]
 
     for lab, val in specs:
@@ -95,7 +98,7 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
         y_ptr += sp
 
     # --- PREȚ ---
-    y_pret = H - 150
+    y_pret = H - 165
     if pret:
         t1, t2, t3 = "Pret: ", f"{pret}", " lei"
         w1, w2, w3 = draw.textlength(t1, font=f_pret_text), draw.textlength(t2, font=f_pret_cifra), draw.textlength(t3, font=f_pret_text)
@@ -106,7 +109,7 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
         
         txt_bag = f"B{b_cod}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text(((W - w_bag) // 2, y_pret + 50), txt_bag, fill="#333333", font=f_bag)
+        draw.text(((W - w_bag) // 2, y_pret + 52), txt_bag, fill="#333333", font=f_bag)
 
     # --- LOGO ---
     try:
@@ -116,7 +119,7 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
         lw = int(W * 0.65)
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
-        img.paste(logo, ((W - lw) // 2, H - 55), logo)
+        img.paste(logo, ((W - lw) // 2, H - 60), logo)
     except: pass
         
     return img
@@ -143,14 +146,14 @@ for i in range(3):
         p_val = st.text_input(f"Preț Lei", key=f"pr_{i}")
         b_val = st.text_input(f"Cod B", value="001", key=f"bc_{i}")
         
-        with st.expander("Control Font (Până la 500)"):
+        with st.expander("Control Font (Max 500)"):
             ts = st.number_input("Mărime Titlu", 2, 500, 22, key=f"ts_{i}")
-            fs = st.number_input("Mărime Specificații", 2, 500, 11, key=f"fs_{i}")
-            ss = st.slider("Spațiere", 2, 500, 14, key=f"ss_{i}")
+            fs = st.number_input("Mărime Specificații", 2, 500, 10, key=f"fs_{i}")
+            ss = st.slider("Spațiere", 2, 500, 12, key=f"ss_{i}")
             
             stoc = st.selectbox("Stocare", STOCARE_OPTIUNI, index=4, key=f"st_{i}")
             ram = st.selectbox("RAM", RAM_OPTIUNI, index=3, key=f"ra_{i}")
-            bat = st.selectbox("Bat. %", [str(x) for x in range(100, 69, -1)], key=f"ba_{i}")
+            bat = st.selectbox("Sănătate Bat. %", [str(x) for x in range(100, 69, -1)], key=f"ba_{i}")
             ag = st.selectbox("Cod Ag", [str(x) for x in range(1, 56)], key=f"ag_{i}")
             fn = st.selectbox("Font", ["Montserrat", "Roboto", "Poppins", "Anton"], key=f"fn_{i}")
 
@@ -158,32 +161,19 @@ for i in range(3):
         st.image(img_res, width=zoom_val)
         final_imgs.append(img_res)
 
-# ==========================================
-# GENERARE PDF (3 PE LĂȚIME A4 VERTICAL)
-# ==========================================
 st.markdown("---")
 if st.button("🚀 GENEREAZĂ PDF FINAL"):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
-    
-    # Parametri A4 (210mm)
-    w_mm = 62 
-    h_mm = w_mm * (464/256) # Proporția imaginii
-    x_off = 8
-    y_off = 15
-    gap = 2
-    
+    w_mm, x_off, y_off, gap = 62, 8, 15, 2
     for idx, f_img in enumerate(final_imgs):
         buf = io.BytesIO()
         f_img.save(buf, format='PNG')
         buf.seek(0)
-        
-        t_path = f"temp_label_{idx}.png"
-        with open(t_path, "wb") as f:
-            f.write(buf.getbuffer())
-        
+        t_path = f"temp_{idx}.png"
+        with open(t_path, "wb") as f: f.write(buf.getbuffer())
         pdf.image(t_path, x=x_off + (idx * (w_mm + gap)), y=y_off, w=w_mm)
-
+    
     pdf_bytes = pdf.output(dest='S')
     if isinstance(pdf_bytes, str): pdf_bytes = pdf_bytes.encode('latin-1')
     st.download_button("💾 DESCARCĂ PDF", pdf_bytes, "Etichete.pdf", "application/pdf")
