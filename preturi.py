@@ -131,3 +131,48 @@ df = pd.read_excel(url_sheet)
 
 st.sidebar.header("⚙️ Setări")
 zoom_val = st.sidebar.slider("Mărime Previzualizare", 100, 600, 350)
+
+col_labels = st.columns(3)
+final_imgs = []
+
+for i in range(3):
+    with col_labels[i]:
+        st.subheader(f"Eticheta {i+1}")
+        b_sel = st.selectbox(f"Brand", sorted(df['Brand'].dropna().unique()), key=f"br_{i}")
+        m_sel = st.selectbox(f"Model", df[df['Brand'] == b_sel]['Model'].dropna().unique(), key=f"mo_{i}")
+        r_data = df[(df['Brand'] == b_sel) & (df['Model'] == m_sel)].iloc[0]
+        
+        p_val = st.text_input(f"Preț Lei", key=f"pr_{i}")
+        b_val = st.text_input(f"Cod B", value="001", key=f"bc_{i}")
+        
+        with st.expander("Control Font (Max 500)"):
+            ts = st.number_input("Mărime Titlu", 10, 500, 70, key=f"ts_{i}")
+            fs = st.number_input("Mărime Specificații", 10, 500, 35, key=f"fs_{i}")
+            ss = st.slider("Spațiere", 10, 500, 60, key=f"ss_{i}")
+            
+            stoc = st.selectbox("Stocare", STOCARE_OPTIUNI, index=4, key=f"st_{i}")
+            ram = st.selectbox("RAM", RAM_OPTIUNI, index=3, key=f"ra_{i}")
+            bat = st.selectbox("Bat. %", [str(x) for x in range(100, 69, -1)], key=f"ba_{i}")
+            ag = st.selectbox("Cod Ag", [str(x) for x in range(1, 56)], key=f"ag_{i}")
+            fn = st.selectbox("Font", ["Montserrat", "Roboto", "Poppins", "Anton"], key=f"fn_{i}")
+
+        img_res = creeaza_imagine_eticheta(r_data, ts, fs, ss, fn, p_val, b_val, ag, bat, stoc, ram)
+        st.image(img_res, width=zoom_val)
+        final_imgs.append(img_res)
+
+st.markdown("---")
+if st.button("🚀 GENEREAZĂ PDF FINAL"):
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
+    pdf.add_page()
+    w_mm, x_off, y_off, gap = 62, 8, 15, 2
+    for idx, f_img in enumerate(final_imgs):
+        buf = io.BytesIO()
+        f_img.save(buf, format='PNG')
+        buf.seek(0)
+        t_path = f"temp_{idx}.png"
+        with open(t_path, "wb") as f:
+            f.write(buf.getbuffer())
+        pdf.image(t_path, x=x_off + (idx * (w_mm + gap)), y=y_off, w=w_mm)
+    pdf_out = pdf.output(dest='S')
+    if isinstance(pdf_out, str): pdf_out = pdf_out.encode('latin-1')
+    st.download_button("💾 DESCARCĂ PDF", pdf_out, "Etichete.pdf", "application/pdf")
