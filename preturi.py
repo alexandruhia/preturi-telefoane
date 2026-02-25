@@ -8,36 +8,34 @@ from fpdf import FPDF
 # ==========================================
 # CONFIGURARE CULORI BRAND
 # ==========================================
-COLOR_SITE_BG = "#96c83f"
-COLOR_ETICHETA_BG = "#cf1f2f"
-COLOR_TEXT_GLOBAL = "#000000"
+COLOR_SITE_BG = "#96c83f"      # Verde lime
+COLOR_ETICHETA_BG = "#cf1f2f"  # Roșu brand
+COLOR_TEXT_GLOBAL = "#000000"  # Negru
 
-st.set_page_config(page_title="ExpressCredit - Manual Liquid", layout="wide")
+st.set_page_config(page_title="ExpressCredit - Label Designer", layout="wide")
 
 # ==========================================
-# CSS - INTERFAȚĂ
+# CSS - INTERFAȚĂ MODERNĂ
 # ==========================================
 st.markdown(f"""
     <style>
-    .stApp {{ background-color: {COLOR_SITE_BG}; color: {COLOR_TEXT_GLOBAL} !important; }}
-    h1, h2, h3, p, span, label, div {{ color: {COLOR_TEXT_GLOBAL} !important; }}
+    .stApp {{
+        background-color: {COLOR_SITE_BG};
+    }}
     [data-testid="column"] {{
-        background: rgba(255, 255, 255, 0.88);
-        backdrop-filter: blur(15px);
+        background: rgba(255, 255, 255, 0.95);
         border-radius: 20px;
-        padding: 15px !important;
-        border: 1px solid rgba(255,255,255,0.4);
-        margin-bottom: 10px;
+        padding: 20px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
     }}
-    div.stButton > button {{
-        width: 100%; background: #FFFFFF; color: {COLOR_TEXT_GLOBAL} !important;
-        border: 2px solid {COLOR_TEXT_GLOBAL}; border-radius: 16px; font-weight: 800;
-    }}
+    h3 {{ color: #000 !important; font-weight: 800 !important; }}
+    label {{ color: #333 !important; font-weight: 600 !important; }}
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# CONSTANTE ȘI FUNCȚII
+# FUNCȚII ȘI RESURSE
 # ==========================================
 STOCARE_OPTIUNI = ["8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
 RAM_OPTIUNI = ["1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB", "12 GB", "16 GB", "24 GB", "32 GB"]
@@ -54,138 +52,18 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, titlu_size, font_size, line_spacing, font_name, pret_val, b_text, ag_val, bat_val, stocare_manuala, ram_manual):
-    # REZOLUȚIE ÎNALTĂ pentru a suporta fonturi mari (3x față de înainte)
-    W, H = 1800, 3400 
+def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag_val, bat_val, stoc_man, ram_man):
+    # Rezoluție calibrată pentru ca fontul de 500 să fie vizibil uriaș
+    W, H = 1200, 2200 
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
-    margine = 80
+    margine_ext = 60
     
-    # Poziționări relative la noua rezoluție
-    PRET_Y_FIX = 2400       
-    PRET_SIZE_FIX = 150     
-    CIFRA_SIZE_FIX = 320   
-    B_AG_SIZE_FIX = 120     
+    # Fundal alb rotunjit (lăsăm spațiu jos pentru logo)
+    draw.rounded_rectangle([margine_ext, margine_ext, W-margine_ext, H-300], radius=120, fill="white")
 
-    # Fundal alb
-    draw.rounded_rectangle([margine, margine, W-margine, H-500], radius=150, fill="white")
-
-    f_reg_bytes = get_font_bytes(font_name, "Regular")
-    f_bold_bytes = get_font_bytes(font_name, "Bold") or f_reg_bytes
+    f_bytes_reg = get_font_bytes(font_name, "Regular")
+    f_bytes_bold = get_font_bytes(font_name, "Bold") or f_bytes_reg
     
     try:
-        if f_reg_bytes:
-            f_titlu = ImageFont.truetype(io.BytesIO(f_bold_bytes), titlu_size)
-            f_label = ImageFont.truetype(io.BytesIO(f_bold_bytes), font_size)
-            f_valoare = ImageFont.truetype(io.BytesIO(f_reg_bytes), font_size)
-            f_pret_text = ImageFont.truetype(io.BytesIO(f_bold_bytes), PRET_SIZE_FIX)
-            f_pret_cifra = ImageFont.truetype(io.BytesIO(f_bold_bytes), CIFRA_SIZE_FIX)
-            f_bag = ImageFont.truetype(io.BytesIO(f_bold_bytes), B_AG_SIZE_FIX)
-        else:
-            f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
-    except:
-        f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
-
-    # TITLU
-    txt_brand = str(row['Brand'])
-    txt_model = str(row['Model'])
-    draw.text(((W - draw.textlength(txt_brand, font=f_titlu)) // 2, margine * 4), txt_brand, fill="#000000", font=f_titlu)
-    draw.text(((W - draw.textlength(txt_model, font=f_titlu)) // 2, margine * 4 + titlu_size + 20), txt_model, fill="#000000", font=f_titlu)
-
-    # SPECIFICAȚII
-    y_pos = margine * 14 
-    specs = [
-        ("Display", row.get("Display", "-")),
-        ("OS", row.get("OS", "-")),
-        ("Stocare", stocare_manuala),
-        ("RAM", ram_manual),
-        ("Camera", row.get("Camera principala", "-")),
-        ("Baterie", row.get("Capacitate baterie", "-")),
-        ("Sanatate", f"{bat_val}%")
-    ]
-
-    for label, val in specs:
-        t_label = f"{label}: "
-        t_val = str(val)
-        draw.text((margine * 2, y_pos), t_label, fill="#333333", font=f_label)
-        offset = draw.textlength(t_label, font=f_label)
-        draw.text((margine * 2 + offset, y_pos), t_val, fill="#000000", font=f_valoare)
-        y_pos += line_spacing
-
-    # PREȚ
-    if pret_val:
-        t1, t2, t3 = "Pret: ", f"{pret_val}", " lei"
-        w1, w2, w3 = draw.textlength(t1, font=f_pret_text), draw.textlength(t2, font=f_pret_cifra), draw.textlength(t3, font=f_pret_text)
-        start_x = (W - (w1 + w2 + w3)) // 2
-        draw.text((start_x, PRET_Y_FIX + 100), t1, fill="#000000", font=f_pret_text)
-        draw.text((start_x + w1, PRET_Y_FIX), t2, fill="#000000", font=f_pret_cifra)
-        draw.text((start_x + w1 + w2, PRET_Y_FIX + 100), t3, fill="#000000", font=f_pret_text)
-        
-        txt_bag = f"B{b_text}@Ag{ag_val}"
-        w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text(((W - w_bag) // 2, PRET_Y_FIX + 350), txt_bag, fill="#333333", font=f_bag)
-
-    # LOGO
-    try:
-        url_l = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
-        logo_resp = requests.get(url_l, timeout=5)
-        logo = Image.open(io.BytesIO(logo_resp.content)).convert("RGBA")
-        lw = int(W * 0.75) 
-        lh = int(lw * (logo.size[1] / logo.size[0]))
-        logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
-        img.paste(logo, ((W - lw) // 2, 2900), logo)
-    except: pass
-        
-    return img
-
-# ==========================================
-# LOGICĂ STREAMLIT
-# ==========================================
-url_sheet = "https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx"
-df = pd.read_excel(url_sheet)
-
-st.sidebar.title("Setări Globale")
-zoom = st.sidebar.slider("Zoom Previzualizare", 100, 600, 300)
-
-FONT_NAMES = ["Montserrat", "Roboto", "Inter", "Poppins", "Anton"]
-ag_list = [str(i) for i in range(1, 56)]
-battery_list = [str(i) for i in range(100, 0, -1)]
-
-col_main = st.columns(3)
-final_imgs = []
-
-for i in range(3):
-    with col_main[i]:
-        st.subheader(f"Eticheta {i+1}")
-        brand = st.selectbox(f"Brand", sorted(df['Brand'].dropna().unique()), key=f"b_{i}")
-        model = st.selectbox(f"Model", df[df['Brand'] == brand]['Model'].dropna().unique(), key=f"m_{i}")
-        r_data = df[(df['Brand'] == brand) & (df['Model'] == model)].iloc[0]
-        
-        pret_input = st.text_input(f"Preț Lei", key=f"pr_{i}")
-        b_input = st.text_input(f"Cod B", key=f"bt_{i}")
-        
-        with st.expander("Control Font & Spațiere"):
-            # AICI AM MODIFICAT MAXIMUL LA 500
-            t_size = st.number_input("Mărime Titlu", 10, 500, 140, key=f"tsz_{i}")
-            f_size = st.number_input("Mărime Spec.", 10, 500, 70, key=f"sz_{i}")
-            sp = st.slider("Spațiere Rânduri", 10, 500, 120, key=f"sp_{i}")
-            
-            stoc_manual = st.selectbox("Stocare", STOCARE_OPTIUNI, index=4, key=f"stoc_{i}")
-            ram_manual = st.selectbox("RAM", RAM_OPTIUNI, index=3, key=f"ram_{i}")
-            bat_choice = st.selectbox(f"Baterie %", battery_list, key=f"bat_{i}")
-            ag_input = st.selectbox(f"Valoare Ag", ag_list, key=f"ag_{i}")
-            fn = st.selectbox("Font", FONT_NAMES, key=f"fn_{i}")
-
-        current_img = creeaza_imagine_eticheta(r_data, t_size, f_size, sp, fn, pret_input, b_input, ag_input, bat_choice, stoc_manual, ram_manual)
-        st.image(current_img, width=zoom)
-        final_imgs.append(current_img)
-
-# ==========================================
-# GENERARE PDF (3 PE LĂȚIME A4 VERTICAL)
-# ==========================================
-st.markdown("---")
-if st.button("🚀 GENEREAZĂ PDF A4 VERTICAL (3 PE RÂND)"):
-    pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.add_page()
-    
-    # Parametrii pentru 3 etichete pe latime (A4 = 210
+        f_titlu = ImageFont.truetype(io.BytesIO(f_bytes_bold),
