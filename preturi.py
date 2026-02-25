@@ -12,7 +12,7 @@ COLOR_SITE_BG = "#96c83f"
 COLOR_ETICHETA_BG = "#cf1f2f"
 COLOR_TEXT_GLOBAL = "#000000"
 
-st.set_page_config(page_title="ExpressCredit - Compact Final", layout="wide")
+st.set_page_config(page_title="ExpressCredit - Smart Spacing", layout="wide")
 
 # ==========================================
 # CSS - INTERFATA
@@ -25,9 +25,7 @@ st.markdown(f"""
         border-radius: 12px;
         padding: 10px !important;
         margin-bottom: 5px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }}
-    h3 {{ color: #000 !important; font-weight: 800 !important; font-size: 1.2rem !important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -49,8 +47,8 @@ def get_font_bytes(font_name, weight):
         except: continue
     return None
 
-def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag_val, bat_val, stoc_man, ram_man):
-    # Dimensiuni: 256x392 (70% inaltime)
+def creeaza_imagine_eticheta(row, t_size, f_size, sp_mult, font_name, pret, b_cod, ag_val, bat_val, stoc_man, ram_man):
+    # Dimensiuni compacte
     W, H = 256, 392 
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
@@ -77,10 +75,13 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
     for txt in [str(row['Brand']), str(row['Model'])]:
         w_txt = draw.textlength(txt, font=f_titlu)
         draw.text(((W - w_txt) // 2, y_ptr), txt, fill="#000000", font=f_titlu)
-        y_ptr += t_size + 1
+        y_ptr += t_size + 2 # Distantare automata titlu
 
     # --- SPECIFICATII ---
-    y_ptr += 8 
+    y_ptr += 5 
+    # SPATIERE DINAMICA: folosim marimea fontului inmultita cu un coeficient
+    pas_rand = f_size + sp_mult 
+    
     specs = [
         ("Display", row.get("Display", "-")),
         ("Procesor", row.get("Chipset", "-")),
@@ -95,7 +96,7 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
         draw.text((margine_ext * 2.5, y_ptr), t_lab, fill="#444444", font=f_label)
         offset = draw.textlength(t_lab, font=f_label)
         draw.text((margine_ext * 2.5 + offset, y_ptr), str(val), fill="#000000", font=f_valoare)
-        y_ptr += sp
+        y_ptr += pas_rand # Randul se muta exact cat e fontul + extra
 
     # --- PRET ---
     y_pret = H - 135
@@ -104,7 +105,6 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
         w_l = draw.textlength(t_label, font=f_pret_text)
         w_s = draw.textlength(t_suma, font=f_pret_cifra)
         w_m = draw.textlength(t_moneda, font=f_pret_text)
-        
         start_x = (W - (w_l + w_s + w_m)) // 2
         draw.text((start_x, y_pret + 12), t_label, fill="#000000", font=f_pret_text)
         draw.text((start_x + w_l, y_pret), t_suma, fill="#000000", font=f_pret_cifra)
@@ -133,15 +133,15 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp, font_name, pret, b_cod, ag
 url_sheet = "https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx"
 df = pd.read_excel(url_sheet)
 
-st.sidebar.header("Configurare")
-zoom_val = st.sidebar.slider("Previzualizare", 100, 600, 300)
+st.sidebar.header("⚙️ Setari")
+zoom_val = st.sidebar.slider("Zoom Previzualizare", 100, 600, 300)
 
 col_labels = st.columns(3)
 final_imgs = []
 
 for i in range(3):
     with col_labels[i]:
-        st.subheader(f"Eticheta {i+1}")
+        st.subheader(f"📱 Eticheta {i+1}")
         b_sel = st.selectbox(f"Brand", sorted(df['Brand'].dropna().unique()), key=f"br_{i}")
         m_sel = st.selectbox(f"Model", df[df['Brand'] == b_sel]['Model'].dropna().unique(), key=f"mo_{i}")
         r_data = df[(df['Brand'] == b_sel) & (df['Model'] == m_sel)].iloc[0]
@@ -149,10 +149,12 @@ for i in range(3):
         p_val = st.text_input(f"Pret Lei", key=f"pr_{i}")
         b_val = st.text_input(f"Cod B", value="001", key=f"bc_{i}")
         
-        with st.expander("Font & Spatiere"):
+        with st.expander("Font & Control Spatiere"):
             ts = st.number_input("Marime Titlu", 2, 500, 18, key=f"ts_{i}")
             fs = st.number_input("Marime Spec", 2, 500, 9, key=f"fs_{i}")
-            ss = st.slider("Spatiere", 2, 500, 11, key=f"ss_{i}")
+            # Acesta adauga spatiu EXTRA peste marimea fontului
+            ss = st.slider("Spatiu intre randuri (extra)", 0, 100, 2, key=f"ss_{i}")
+            
             stoc = st.selectbox("Stocare", STOCARE_OPTIUNI, index=4, key=f"st_{i}")
             ram = st.selectbox("RAM", RAM_OPTIUNI, index=3, key=f"ra_{i}")
             bat = st.selectbox("Bat %", [str(x) for x in range(100, 69, -1)], key=f"ba_{i}")
