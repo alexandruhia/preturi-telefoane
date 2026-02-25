@@ -12,10 +12,10 @@ COLOR_SITE_BG = "#96c83f"
 COLOR_ETICHETA_BG = "#cf1f2f"
 COLOR_TEXT_GLOBAL = "#000000"
 
-st.set_page_config(page_title="ExpressCredit - AutoLayout Edition", layout="wide")
+st.set_page_config(page_title="ExpressCredit - HD Edition", layout="wide")
 
 # ==========================================
-# CSS - INTERFATA CURATA
+# CSS - INTERFATA
 # ==========================================
 st.markdown(f"""
     <style>
@@ -23,7 +23,7 @@ st.markdown(f"""
     [data-testid="column"] {{
         background: rgba(255, 255, 255, 0.95);
         border-radius: 12px;
-        padding: 10px !important;
+        padding: 15px !important;
         margin-bottom: 5px;
     }}
     </style>
@@ -48,14 +48,14 @@ def get_font_bytes(font_name, weight):
     return None
 
 def creeaza_imagine_eticheta(row, t_size, f_size, sp_extra, font_name, pret, b_cod, ag_val, bat_val, stoc_man, ram_man):
-    # Dimensiuni compacte (256x392 conform cerintei tale de 70%)
-    W, H = 256, 392 
+    # PANZA MARITA: 768x1176 pixeli (HD)
+    W, H = 768, 1176 
     img = Image.new('RGB', (W, H), color=COLOR_ETICHETA_BG) 
     draw = ImageDraw.Draw(img)
-    margine_ext = 8
+    margine_ext = 25 
     
-    # Fundal alb
-    draw.rounded_rectangle([margine_ext, margine_ext, W-margine_ext, H-65], radius=15, fill="white")
+    # Fundal alb HD
+    draw.rounded_rectangle([margine_ext, margine_ext, W-margine_ext, H-180], radius=40, fill="white")
 
     f_bytes_reg = get_font_bytes(font_name, "Regular")
     f_bytes_bold = get_font_bytes(font_name, "Bold") or f_bytes_reg
@@ -64,22 +64,21 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp_extra, font_name, pret, b_c
         f_titlu = ImageFont.truetype(io.BytesIO(f_bytes_bold), t_size)
         f_label = ImageFont.truetype(io.BytesIO(f_bytes_bold), f_size)
         f_valoare = ImageFont.truetype(io.BytesIO(f_bytes_reg), f_size)
-        f_pret_text = ImageFont.truetype(io.BytesIO(f_bytes_bold), 16)
-        f_pret_cifra = ImageFont.truetype(io.BytesIO(f_bytes_bold), 36)
-        f_bag = ImageFont.truetype(io.BytesIO(f_bytes_bold), 12)
+        f_pret_text = ImageFont.truetype(io.BytesIO(f_bytes_bold), 45)
+        f_pret_cifra = ImageFont.truetype(io.BytesIO(f_bytes_bold), 110)
+        f_bag = ImageFont.truetype(io.BytesIO(f_bytes_bold), 35)
     except:
         f_titlu = f_label = f_valoare = f_pret_text = f_pret_cifra = f_bag = ImageFont.load_default()
 
-    # --- TITLU AUTO-SPACED ---
-    y_ptr = margine_ext * 1.5 
+    # --- TITLU AUTO-LAYOUT ---
+    y_ptr = margine_ext * 2.5
     for txt in [str(row['Brand']), str(row['Model'])]:
         w_txt = draw.textlength(txt, font=f_titlu)
         draw.text(((W - w_txt) // 2, y_ptr), txt, fill="#000000", font=f_titlu)
-        y_ptr += t_size + (sp_extra // 2) # Titlul impinge dinamic restul textului
+        y_ptr += t_size + (sp_extra // 2)
 
-    # --- SPECIFICATII DINAMICE ---
-    y_ptr += 5 
-    # Pasul de rand este acum marimea fontului + padding-ul ales
+    # --- SPECIFICATII ---
+    y_ptr += 30 
     pas_rand = f_size + sp_extra 
     
     specs = [
@@ -93,24 +92,27 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp_extra, font_name, pret, b_c
 
     for lab, val in specs:
         t_lab = f"{lab}: "
-        draw.text((margine_ext * 2.5, y_ptr), t_lab, fill="#444444", font=f_label)
+        draw.text((margine_ext * 3, y_ptr), t_lab, fill="#444444", font=f_label)
         offset = draw.textlength(t_lab, font=f_label)
-        draw.text((margine_ext * 2.5 + offset, y_ptr), str(val), fill="#000000", font=f_valoare)
+        draw.text((margine_ext * 3 + offset, y_ptr), str(val), fill="#000000", font=f_valoare)
         y_ptr += pas_rand 
 
-    # --- ZONA PRET CENTRATA ---
-    y_pret = H - 135
+    # --- ZONA PRET HD ---
+    y_pret = H - 420
     if pret:
         t_label, t_suma, t_moneda = "Pret: ", f"{pret}", " lei"
-        w_l, w_s, w_m = draw.textlength(t_label, font=f_pret_text), draw.textlength(t_suma, font=f_pret_cifra), draw.textlength(t_moneda, font=f_pret_text)
+        w_l = draw.textlength(t_label, font=f_pret_text)
+        w_s = draw.textlength(t_suma, font=f_pret_cifra)
+        w_m = draw.textlength(t_moneda, font=f_pret_text)
+        
         start_x = (W - (w_l + w_s + w_m)) // 2
-        draw.text((start_x, y_pret + 12), t_label, fill="#000000", font=f_pret_text)
+        draw.text((start_x, y_pret + 40), t_label, fill="#000000", font=f_pret_text)
         draw.text((start_x + w_l, y_pret), t_suma, fill="#000000", font=f_pret_cifra)
-        draw.text((start_x + w_l + w_s, y_pret + 12), t_moneda, fill="#000000", font=f_pret_text)
+        draw.text((start_x + w_l + w_s, y_pret + 40), t_moneda, fill="#000000", font=f_pret_text)
         
         txt_bag = f"B{b_cod}@Ag{ag_val}"
         w_bag = draw.textlength(txt_bag, font=f_bag)
-        draw.text(((W - w_bag) // 2, y_pret + 48), txt_bag, fill="#333333", font=f_bag)
+        draw.text(((W - w_bag) // 2, y_pret + 140), txt_bag, fill="#333333", font=f_bag)
 
     # --- LOGO ---
     try:
@@ -120,7 +122,7 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp_extra, font_name, pret, b_c
         lw = int(W * 0.6)
         lh = int(lw * (logo.size[1] / logo.size[0]))
         logo = logo.resize((lw, lh), Image.Resampling.LANCZOS)
-        img.paste(logo, ((W - lw) // 2, H - 52), logo)
+        img.paste(logo, ((W - lw) // 2, H - 150), logo)
     except: pass
         
     return img
@@ -131,8 +133,8 @@ def creeaza_imagine_eticheta(row, t_size, f_size, sp_extra, font_name, pret, b_c
 url_sheet = "https://docs.google.com/spreadsheets/d/1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA/export?format=xlsx"
 df = pd.read_excel(url_sheet)
 
-st.sidebar.header("⚙️ Setari Vizuale")
-zoom_val = st.sidebar.slider("Zoom Previzualizare", 100, 600, 300)
+st.sidebar.header("⚙️ Setari HD")
+zoom_val = st.sidebar.slider("Zoom Previzualizare", 100, 800, 400)
 
 col_labels = st.columns(3)
 final_imgs = []
@@ -147,11 +149,10 @@ for i in range(3):
         p_val = st.text_input(f"Pret Lei", key=f"pr_{i}")
         b_val = st.text_input(f"Cod B", value="001", key=f"bc_{i}")
         
-        with st.expander("🛠️ Control Font si Spatiu"):
-            ts = st.number_input("Marime Titlu", 2, 500, 18, key=f"ts_{i}")
-            fs = st.number_input("Marime Specificatii", 2, 500, 9, key=f"fs_{i}")
-            # Acest slider acum doar adauga spatiu EXTRA (de siguranta)
-            ss = st.slider("Spatiu extra intre randuri", 0, 50, 2, key=f"ss_{i}")
+        with st.expander("🛠️ Control Font HD"):
+            ts = st.number_input("Marime Titlu", 10, 1000, 65, key=f"ts_{i}")
+            fs = st.number_input("Marime Specificatii", 5, 500, 32, key=f"fs_{i}")
+            ss = st.slider("Spatiu extra intre randuri", 0, 200, 15, key=f"ss_{i}")
             
             stoc = st.selectbox("Stocare", STOCARE_OPTIUNI, index=4, key=f"st_{i}")
             ram = st.selectbox("RAM", RAM_OPTIUNI, index=3, key=f"ra_{i}")
