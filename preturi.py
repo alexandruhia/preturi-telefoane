@@ -25,13 +25,17 @@ def get_clean_specs(row_dict):
             clean[k] = str(v).strip()
     return clean
 
-# --- FUNCȚIE GENERARE PDF (LATIME JUMATATE) ---
+# --- FUNCȚIE GENERARE PDF (A4 PORTRET - 3 PE RÂND) ---
 def create_pdf(selected_phones_list, prices):
-    pdf = FPDF()
+    # Foaie A4 standard (Portret)
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # Setăm lățimea etichetei la ~95mm (aprox jumătate din A4 minus margini)
-    label_width = 95 
+    # Parametri pentru a încadra 3 etichete pe lățimea de 210mm
+    margin_left = 7
+    gutter = 4           # Spațiu între etichete
+    label_width = 62     # 62*3 = 186mm + (4*2) gap + 14 margini = ~208mm (Perfect pt A4)
+    label_height = 150   # Înălțime fixă
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
@@ -39,132 +43,115 @@ def create_pdf(selected_phones_list, prices):
             brand_model = f"{phone.get('Brand', '')} {phone.get('Model', '')}".upper()
             price_val = str(prices[i])
             
-            start_y = pdf.get_y()
-            num_lines = len([k for k in specs if k not in ["Brand", "Model"]])
-            frame_height = (num_lines * 6) + 50 
+            # Calcul poziție X (una lângă alta)
+            current_x = margin_left + (i * (label_width + gutter))
+            current_y = 20
             
-            # Desenare Frame Roșu (Centrat pe pagină sau aliniat la stânga)
-            # Folosim x=57.5 pentru a-l centra pe foaia de 210mm
-            pos_x = 57.5 
+            # 1. Frame Roșu
             pdf.set_draw_color(255, 0, 0)
-            pdf.set_line_width(1)
-            pdf.rect(pos_x, start_y, label_width, frame_height)
+            pdf.set_line_width(0.8)
+            pdf.rect(current_x, current_y, label_width, label_height)
             
-            # Titlu Model
-            pdf.set_y(start_y + 5)
-            pdf.set_x(pos_x + 5)
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(label_width - 10, 8, txt=brand_model, ln=True, align='C')
+            # 2. Titlu (Font adaptat la lățimea de 62mm)
+            pdf.set_y(current_y + 5)
+            pdf.set_x(current_x)
+            pdf.set_font("Arial", "B", 10)
+            pdf.multi_cell(label_width, 5, txt=brand_model, align='C')
             
-            # Specificații
-            pdf.set_font("Arial", "", 9)
+            # 3. Specificații (Font mic pt. claritate)
+            pdf.set_font("Arial", "", 8)
+            pdf.set_y(current_y + 18)
             for key, value in specs.items():
                 if key not in ["Brand", "Model"]:
-                    pdf.set_x(pos_x + 5)
-                    pdf.multi_cell(label_width - 10, 5, txt=f"{key}: {value}", align='L')
+                    pdf.set_x(current_x + 3)
+                    pdf.multi_cell(label_width - 6, 4, txt=f"{key}: {value}", align='L')
             
-            # RUBRICA PREȚ
-            pdf.set_y(start_y + frame_height - 25)
+            # 4. Rubrica Preț (Centrată la baza etichetei)
             pdf.set_text_color(255, 0, 0)
-            pdf.set_x(pos_x)
+            pdf.set_y(current_y + label_height - 22)
+            pdf.set_x(current_x)
             
-            # Pret (20) + Cifra (40) + lei (20) - grupate la mijlocul etichetei
-            pdf.set_font("Arial", "B", 16) # Scăzut puțin pentru a încăpea în 95mm
-            pdf.cell(25, 15, txt="Pret: ", ln=False, align='R')
-            pdf.set_font("Arial", "B", 30)
-            pdf.cell(35, 15, txt=price_val, ln=False, align='C')
-            pdf.set_font("Arial", "B", 16)
-            pdf.cell(20, 15, txt=" lei", ln=True, align='L')
+            # Calculăm alinierea pentru: Pret (20) Valoare (40) lei (20)
+            # Folosim fonturi ușor reduse proporțional să încapă în 62mm
+            pdf.set_font("Arial", "B", 14) # Text "Pret"
+            pdf.cell(15, 12, txt="Pret:", ln=False, align='R')
+            
+            pdf.set_font("Arial", "B", 24) # Cifra
+            pdf.cell(32, 12, txt=price_val, ln=False, align='C')
+            
+            pdf.set_font("Arial", "B", 14) # Text "lei"
+            pdf.cell(10, 12, txt="lei", ln=True, align='L')
             
             pdf.set_text_color(0, 0, 0)
-            pdf.ln(10)
-            
-            # Dacă eticheta următoare nu mai are loc pe pagină, adăugăm pagină nouă
-            if pdf.get_y() > 220:
-                pdf.add_page()
             
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete Telefoane", layout="wide")
+st.set_page_config(page_title="Etichete A4 Portret", layout="wide")
 
-# CSS pentru lățime jumătate (max-width: 50%)
 st.markdown("""
     <style>
-    .red-frame {
-        border: 4px solid #FF0000;
-        border-radius: 15px;
-        padding: 20px;
-        margin: 10px auto; /* Centrare */
-        background-color: #FFFFFF;
-        width: 100%; /* Ocupă tot containerul coloanei care e deja 1/3 */
-        max-width: 300px; /* Limităm lățimea efectivă */
-        min-height: 450px;
+    .label-container {
+        border: 3px solid #FF0000;
+        border-radius: 10px;
+        padding: 10px;
+        background-color: white;
+        min-height: 550px;
         display: flex;
         flex-direction: column;
+        justify-content: space-between;
     }
-    .specs-container { flex-grow: 1; font-size: 14px; }
-    .price-container {
+    .specs-text { font-size: 13px; line-height: 1.4; }
+    .price-section {
         text-align: center;
-        margin-top: 15px;
-        border-top: 2px solid #FF0000;
-        padding-top: 15px;
+        border-top: 1px solid #ddd;
+        padding-top: 10px;
     }
-    .label-price { color: #FF0000; font-size: 18px; font-weight: bold; }
-    .value-price { color: #FF0000; font-size: 36px; font-weight: bold; }
+    .text-20 { font-size: 20px; font-weight: bold; color: #FF0000; }
+    .text-40 { font-size: 40px; font-weight: bold; color: #FF0000; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📱 Generator Etichete Înguste")
+st.title("📱 Generator Etichete A4 (3 Portret)")
 
 cols = st.columns(3)
-phones_to_export = []
-prices_to_export = []
+phones_to_export = [None, None, None]
+prices_to_export = [0, 0, 0]
 
 for i, col in enumerate(cols):
     with col:
-        st.subheader(f"Slot {i+1}")
+        st.subheader(f"Poziția {i+1}")
         brand_sel = st.selectbox(f"Brand", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
         
         if brand_sel != "-":
             model_sel = st.selectbox(f"Model", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
-            user_price = st.number_input(f"Pret lei", min_value=0, value=0, key=f"p_{i}")
+            u_price = st.number_input(f"Pret lei", min_value=0, key=f"p_{i}")
             
             if model_sel != "-":
                 raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
-                final_specs = get_clean_specs(raw_specs)
-                phones_to_export.append(raw_specs)
-                prices_to_export.append(user_price)
+                phones_to_export[i] = raw_specs
+                prices_to_export[i] = u_price
                 
-                specs_html = "".join([f"• {k}: {v}<br>" for k, v in final_specs.items() if k not in ["Brand", "Model"]])
+                clean_s = get_clean_specs(raw_specs)
+                specs_html = "".join([f"• {k}: {v}<br>" for k, v in clean_s.items() if k not in ["Brand", "Model"]])
                 
-                html_card = f"""
-                <div class="red-frame">
-                    <div class="specs-container">
-                        <h3 style="text-align:center;">{brand_sel}<br>{model_sel}</h3>
+                st.markdown(f"""
+                <div class="label-container">
+                    <div class="specs-text">
+                        <h4 style="text-align:center;">{brand_sel} {model_sel}</h4>
                         {specs_html}
                     </div>
-                    <div class="price-container">
-                        <span class="label-price">Pret:</span>
-                        <span class="value-price">{user_price}</span>
-                        <span class="label-price">lei</span>
+                    <div class="price-section">
+                        <span class="text-20">Pret:</span>
+                        <span class="text-40">{u_price}</span>
+                        <span class="text-20">lei</span>
                     </div>
                 </div>
-                """
-                st.markdown(html_card, unsafe_allow_html=True)
-            else:
-                phones_to_export.append(None)
-                prices_to_export.append(0)
-        else:
-            phones_to_export.append(None)
-            prices_to_export.append(0)
+                """, unsafe_allow_html=True)
 
 st.divider()
 
 if any(phones_to_export):
-    active_phones = [p for p in phones_to_export if p is not None]
-    active_prices = [prices_to_export[i] for i, p in enumerate(phones_to_export) if p is not None]
-    
-    if st.button("🔴 DESCARCĂ ETICHETE PDF (95mm)"):
-        pdf_data = create_pdf(active_phones, active_prices)
-        st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_inguste.pdf", mime="application/pdf")
+    if st.button("🔴 DESCARCĂ PDF A4 (PORTRET)"):
+        pdf_data = create_pdf(phones_to_export, prices_to_export)
+        st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_A4_3buc.pdf", mime="application/pdf")
