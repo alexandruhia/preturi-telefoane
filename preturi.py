@@ -19,22 +19,25 @@ def load_data():
 df = load_data()
 
 def get_clean_specs(row_dict):
+    """Filtrează datele și asigură prezența coloanelor Selfie și Baterie."""
     clean = {}
+    # Definim coloanele pe care le vrem neapărat afișate
+    priority_cols = ["Selfie", "Capacitate baterie", "Procesor", "Memorie RAM", "Memorie interna"]
+    
     for k, v in row_dict.items():
         if pd.notnull(v) and str(v).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[k] = str(v).strip()
     return clean
 
-# --- FUNCȚIE GENERARE PDF (REDUSE CU ÎNCĂ 20%) ---
+# --- FUNCȚIE GENERARE PDF (50x72mm) ---
 def create_pdf(selected_phones_list, prices):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # Parametri noi (Reduși cu 20% față de versiunea anterioară)
     margin_left = 15
     gutter = 8           
-    label_width = 50     # Redus de la 62mm
-    label_height = 72    # Redus de la 90mm
+    label_width = 50     
+    label_height = 72    
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
@@ -50,36 +53,38 @@ def create_pdf(selected_phones_list, prices):
             pdf.set_line_width(0.6)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Titlu (Font micșorat)
+            # 2. Titlu
             pdf.set_y(current_y + 3)
             pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 8)
-            pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
+            pdf.set_font("Arial", "B", 7.5)
+            pdf.multi_cell(label_width, 3, txt=brand_model, align='C')
             
-            # 3. Specificații (Font foarte mic pentru a încăpea în 72mm)
-            pdf.set_font("Arial", "", 6.5)
+            # 3. Specificații (Inclusiv Selfie și Baterie)
+            pdf.set_font("Arial", "", 6)
             pdf.set_y(current_y + 11)
+            
+            # Afișăm Selfie și Baterie primele dacă există, apoi restul
+            display_order = ["Selfie", "Capacitate baterie"] + [k for k in specs if k not in ["Brand", "Model", "Selfie", "Capacitate baterie"]]
+            
             lines_shown = 0
-            for key, value in specs.items():
-                if key not in ["Brand", "Model"] and lines_shown < 8: # Maxim 8 rânduri
+            for key in display_order:
+                if key in specs and lines_shown < 9: # Am mărit la 9 rânduri
                     pdf.set_x(current_x + 2)
-                    pdf.multi_cell(label_width - 4, 3, txt=f"{key}: {value}", align='L')
+                    text = f"{key}: {specs[key]}"
+                    pdf.multi_cell(label_width - 4, 2.8, txt=text, align='L')
                     lines_shown += 1
             
-            # 4. Rubrica Preț (Adaptată la spațiul mic)
+            # 4. Rubrica Preț
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 15)
+            pdf.set_y(current_y + label_height - 14)
             pdf.set_x(current_x)
             
-            # Ajustare proporțională fonturi preț
-            pdf.set_font("Arial", "B", 11) # "Pret:"
-            pdf.cell(12, 10, txt="Pret:", ln=False, align='R')
-            
-            pdf.set_font("Arial", "B", 18) # Valoare
-            pdf.cell(26, 10, txt=price_val, ln=False, align='C')
-            
-            pdf.set_font("Arial", "B", 11) # "lei"
-            pdf.cell(8, 10, txt="lei", ln=True, align='L')
+            pdf.set_font("Arial", "B", 10) 
+            pdf.cell(12, 8, txt="Pret:", ln=False, align='R')
+            pdf.set_font("Arial", "B", 18) 
+            pdf.cell(26, 8, txt=price_val, ln=False, align='C')
+            pdf.set_font("Arial", "B", 10) 
+            pdf.cell(8, 8, txt="lei", ln=True, align='L')
             
             pdf.set_text_color(0, 0, 0)
             
@@ -95,27 +100,23 @@ st.markdown("""
         border-radius: 8px;
         padding: 8px;
         background-color: white;
-        width: 100%;
-        max-width: 240px; /* Reducere vizuală și în browser */
-        min-height: 280px;
-        margin: 0 auto;
+        min-height: 300px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
     }
-    .specs-small { font-size: 11px; line-height: 1.1; overflow: hidden; }
+    .specs-small { font-size: 10px; line-height: 1.1; }
     .price-mini {
         text-align: center;
         border-top: 1px solid #ff0000;
         padding-top: 5px;
-        margin-top: 5px;
     }
     .p20 { font-size: 16px; font-weight: bold; color: #FF0000; }
     .p40 { font-size: 32px; font-weight: bold; color: #FF0000; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📱 Etichete Mini (-20%)")
+st.title("📱 Etichete Mini (Cu Selfie & Baterie)")
 
 cols = st.columns(3)
 phones_to_export = [None, None, None]
@@ -123,11 +124,13 @@ prices_to_export = [0, 0, 0]
 
 for i, col in enumerate(cols):
     with col:
-        st.subheader(f"Slot {i+1}")
-        brand_sel = st.selectbox(f"Brand", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
+        st.subheader(f"Telefon {i+1}")
+        brand_list = sorted(df["Brand"].dropna().unique().tolist())
+        brand_sel = st.selectbox(f"Brand", ["-"] + brand_list, key=f"b_{i}")
         
         if brand_sel != "-":
-            model_sel = st.selectbox(f"Model", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
+            model_list = df[df["Brand"] == brand_sel]["Model"].dropna().tolist()
+            model_sel = st.selectbox(f"Model", ["-"] + model_list, key=f"m_{i}")
             u_price = st.number_input(f"Pret", min_value=0, key=f"p_{i}")
             
             if model_sel != "-":
@@ -136,13 +139,15 @@ for i, col in enumerate(cols):
                 prices_to_export[i] = u_price
                 
                 clean_s = get_clean_specs(raw_specs)
-                # Afișăm doar primele 8 specificații pentru previzualizare
-                specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(clean_s.items())[:8] if k not in ["Brand", "Model"]])
+                
+                # Prioritizăm Selfie și Baterie în HTML
+                keys_to_show = ["Selfie", "Capacitate baterie"] + [k for k in clean_s if k not in ["Brand", "Model", "Selfie", "Capacitate baterie"]]
+                specs_html = "".join([f"• {k}: {clean_s[k]}<br>" for k in keys_to_show[:9] if k in clean_s])
                 
                 st.markdown(f"""
                 <div class="mini-label">
                     <div class="specs-small">
-                        <h5 style="text-align:center; margin:0 0 5px 0;">{brand_sel}<br>{model_sel}</h5>
+                        <h5 style="text-align:center; margin:0 0 5px 0;">{brand_sel} {model_sel}</h5>
                         {specs_html}
                     </div>
                     <div class="price-mini">
@@ -156,6 +161,6 @@ for i, col in enumerate(cols):
 st.divider()
 
 if any(phones_to_export):
-    if st.button("🔴 DESCARCĂ PDF MINI (50x72mm)"):
+    if st.button("🔴 DESCARCĂ PDF"):
         pdf_data = create_pdf(phones_to_export, prices_to_export)
-        st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_mini.pdf", mime="application/pdf")
+        st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_complet.pdf", mime="application/pdf")
