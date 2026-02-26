@@ -5,38 +5,47 @@ from io import BytesIO
 from PIL import Image, ImageOps
 import requests
 
-# --- CONFIGURARE ȘI ÎNCĂRCARE DATE ---
+# --- CONFIGURARE DATE ȘI LOGO GITHUB ---
 SHEET_ID = '1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA'
-URL_DATA = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv'
+DATA_URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv'
+# Înlocuiește 'utilizator', 'repo' și 'cale/catre/logo.png' cu datele tale reale de GitHub
+LOGO_GITHUB_URL = "https://raw.githubusercontent.com/utilizator/repo/main/logo.png"
 
 @st.cache_data(ttl=600)
 def load_data():
     try:
-        df = pd.read_csv(URL_DATA)
+        df = pd.read_csv(DATA_URL)
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except Exception as e:
         st.error(f"Eroare la citirea tabelului: {e}")
         return pd.DataFrame()
 
-df = load_data()
+@st.cache_data(ttl=3600)
+def fetch_and_process_logo(url):
+    """Descarcă logoul de pe GitHub și îl transformă în negru pe transparent/alb."""
+    try:
+        response = requests.get(url)
+        img = Image.open(BytesIO(response.content)).convert("RGBA")
+        
+        # Inversăm culorile pentru a transforma albul în negru
+        r, g, b, a = img.split()
+        rgb_img = Image.merge('RGB', (r, g, b))
+        inverted_rgb = ImageOps.invert(rgb_img)
+        
+        # Recombinăm cu canalul alfa (transparența)
+        final_img = Image.merge('RGBA', (inverted_rgb.split()[0], inverted_rgb.split()[1], inverted_rgb.split()[2], a))
+        
+        buf = BytesIO()
+        final_img.save(buf, format="PNG")
+        buf.seek(0)
+        return buf
+    except Exception as e:
+        st.error(f"Nu s-a putut încărca logoul din GitHub: {e}")
+        return None
 
-# --- PROCESARE LOGO ---
-def get_processed_logo(img_input):
-    """Transformă logoul alb-pe-negru în negru-pe-transparent."""
-    img = Image.open(img_input).convert("RGBA")
-    r, g, b, a = img.split()
-    rgb_img = Image.merge('RGB', (r, g, b))
-    # Inversăm culorile: albul devine negru
-    inverted_img = ImageOps.invert(rgb_img)
-    
-    # Creăm un fundal alb (opțional) sau păstrăm transparența
-    final_img = Image.merge('RGBA', (inverted_img.split()[0], inverted_img.split()[1], inverted_img.split()[2], a))
-    
-    buf = BytesIO()
-    final_img.save(buf, format="PNG")
-    buf.seek(0)
-    return buf
+df = load_data()
+logo_processed = fetch_and_process_logo(LOGO_GITHUB_URL)
 
 def get_specs_in_order(row_dict, original_columns):
     clean = {}
@@ -71,17 +80,18 @@ def create_pdf(selected_phones_list, prices, original_columns, logo_data):
             pdf.set_line_width(0.5)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Logo Negru (Poziționat sus)
+            # 2. Logo din GitHub (Poziționat sus)
             if logo_data:
+                # Imaginea este deja procesată ca fiind neagră
                 pdf.image(logo_data, x=current_x + 5, y=current_y + 4, w=35)
             
-            # 3. Titlu Telefon
+            # 3. Titlu
             pdf.set_y(current_y + 14)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8)
             pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
             
-            # 4. Specificații (Ordine din tabel)
+            # 4. Specificații
             pdf.set_font("Arial", "", 6.2)
             pdf.set_y(current_y + 23)
             lines_shown = 0
@@ -110,13 +120,10 @@ def create_pdf(selected_phones_list, prices, original_columns, logo_data):
 # --- INTERFAȚĂ STREAMLIT ---
 st.set_page_config(page_title="Express Credit Labels", layout="wide")
 
-st.title("📱 Generator Etichete Express Credit Amanet")
-
-# Slot pentru logo - Poți să-l încarci o singură dată aici
-logo_file = st.sidebar.file_uploader("Încarcă Logo-ul (logo.png)", type=["png"])
+st.title("📱 Generator Etichete Express Credit (GitHub Logo)")
 
 if df.empty:
-    st.error("Nu s-au găsit date.")
+    st.error("Datele nu sunt disponibile.")
 else:
     cols = st.columns(3)
     phones_to_export = [None, None, None]
@@ -126,7 +133,7 @@ else:
         with col:
             brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
             if brand_sel != "-":
-                model_sel = st.selectbox(f"Model", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
+                model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 u_price = st.number_input(f"Preț lei", min_value=0, key=f"p_{i}")
                 
                 if model_sel != "-":
@@ -135,25 +142,25 @@ else:
                     prices_to_export[i] = u_price
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns)
-                    specs_preview = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:8]])
+                    specs_prev = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:8]])
                     
                     st.markdown(f"""
                     <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 8px; background: white; text-align: center;">
-                        <p style="color: black; font-weight: bold; margin-bottom: 5px;">LOGO AICI</p>
-                        <h6 style="margin: 5px 0;">{brand_sel} {model_sel}</h6>
-                        <div style="text-align: left; font-size: 10px; color: #444;">{specs_preview}</div>
+                        <img src="{LOGO_GITHUB_URL}" style="width: 100px; filter: invert(1); margin-bottom: 5px;">
+                        <h6 style="margin: 0;">{brand_sel} {model_sel}</h6>
+                        <div style="text-align: left; font-size: 10px; color: #444; margin-top: 5px;">{specs_prev}</div>
                         <div style="margin-top: 10px; border-top: 1px solid #ff0000; padding-top: 5px;">
-                            <span style="color: #FF0000; font-weight: bold; font-size: 24px;">{u_price} lei</span>
+                            <span style="color: #FF0000; font-weight: bold; font-size: 22px;">{u_price} lei</span>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
     st.divider()
 
-    if any(phones_to_export) and logo_file:
+    if any(phones_to_export):
         if st.button("🔴 GENEREAZĂ PDF FINAL"):
-            processed_logo = get_processed_logo(logo_file)
-            pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns, processed_logo)
-            st.download_button(label="📥 Descarcă Etichete", data=pdf_data, file_name="etichete_express.pdf", mime="application/pdf")
-    elif not logo_file:
-        st.info("Vă rugăm să încărcați logoul în bara laterală pentru a genera PDF-ul.")
+            if logo_processed:
+                pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns, logo_processed)
+                st.download_button(label="📥 Descarcă Etichete", data=pdf_data, file_name="etichete_express_github.pdf", mime="application/pdf")
+            else:
+                st.error("Logoul nu a putut fi procesat. Verifică URL-ul GitHub.")
