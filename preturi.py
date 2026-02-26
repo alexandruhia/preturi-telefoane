@@ -27,15 +27,15 @@ def get_specs_in_order(row_dict, original_columns):
                 clean[col] = str(val).strip()
     return clean
 
-# --- FUNCȚIE GENERARE PDF (REVENIRE LA 50x72mm) ---
+# --- FUNCȚIE GENERARE PDF (45x72mm) ---
 def create_pdf(selected_phones_list, prices, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    margin_left = 15
-    gutter = 8           
-    label_width = 50     # Dimensiunea anterioară solicitată
-    label_height = 72    # Dimensiunea anterioară solicitată
+    margin_left = 20     # Margine mai mare pentru a centra grupul de 3 etichete
+    gutter = 6           # Spațiu între etichete
+    label_width = 45     # Redus cu 10% (de la 50mm)
+    label_height = 72    
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
@@ -48,61 +48,62 @@ def create_pdf(selected_phones_list, prices, original_columns):
             
             # 1. Frame Roșu
             pdf.set_draw_color(255, 0, 0)
-            pdf.set_line_width(0.6)
+            pdf.set_line_width(0.5)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Titlu (Font adaptat pentru 50mm)
+            # 2. Titlu (Font adaptat pentru 45mm)
             pdf.set_y(current_y + 3)
             pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 9)
-            pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
+            pdf.set_font("Arial", "B", 8)
+            pdf.multi_cell(label_width, 3.2, txt=brand_model, align='C')
             
-            # 3. Specificații (Ordine tabel)
-            pdf.set_font("Arial", "", 6.5)
+            # 3. Specificații
+            pdf.set_font("Arial", "", 6)
             pdf.set_y(current_y + 12)
             lines_shown = 0
             for key, val in specs.items():
-                if lines_shown < 8:
+                if lines_shown < 9:
                     pdf.set_x(current_x + 2)
-                    pdf.multi_cell(label_width - 4, 3, txt=f"{key}: {val}", align='L')
+                    # multi_cell automat pentru a nu ieși din lățimea de 45mm
+                    pdf.multi_cell(label_width - 4, 2.8, txt=f"{key}: {val}", align='L')
                     lines_shown += 1
             
-            # 4. Rubrica Preț
+            # 4. Rubrica Preț (Adaptată la 45mm)
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 15)
+            pdf.set_y(current_y + label_height - 14)
             pdf.set_x(current_x)
             
-            pdf.set_font("Arial", "B", 11) 
-            pdf.cell(12, 10, txt="Pret:", ln=False, align='R')
-            pdf.set_font("Arial", "B", 18) 
-            pdf.cell(26, 10, txt=price_val, ln=False, align='C')
-            pdf.set_font("Arial", "B", 11) 
-            pdf.cell(8, 10, txt="lei", ln=True, align='L')
+            pdf.set_font("Arial", "B", 9) 
+            pdf.cell(10, 8, txt="Pret:", ln=False, align='R')
+            pdf.set_font("Arial", "B", 16) 
+            pdf.cell(24, 8, txt=price_val, ln=False, align='C')
+            pdf.set_font("Arial", "B", 9) 
+            pdf.cell(8, 8, txt="lei", ln=True, align='L')
             
             pdf.set_text_color(0, 0, 0)
             
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete Compacte", layout="wide")
+st.set_page_config(page_title="Etichete 45x72mm", layout="wide")
 
 st.markdown("""
     <style>
-    .mini-label {
+    .slim-label {
         border: 2px solid #FF0000;
         border-radius: 8px;
         padding: 10px;
         background-color: white;
         width: 100%;
-        max-width: 250px;
-        min-height: 300px;
+        max-width: 220px; /* Reducere vizuală */
+        min-height: 320px;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
     }
-    .specs-small { font-size: 11px; line-height: 1.2; }
-    .price-mini {
+    .specs-slim { font-size: 10px; line-height: 1.1; }
+    .price-slim {
         text-align: center;
         border-top: 1px solid #ff0000;
         padding-top: 5px;
@@ -112,10 +113,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📱 Revenire la Etichete Mini (50x72mm)")
+st.title("📱 Etichete Super Slim (45x72mm)")
 
 if df.empty:
-    st.error("Eroare la încărcarea datelor.")
+    st.error("Eroare date.")
 else:
     cols = st.columns(3)
     phones_to_export = [None, None, None]
@@ -134,15 +135,15 @@ else:
                     prices_to_export[i] = u_price
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns)
-                    specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:8]])
+                    specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:9]])
                     
                     st.markdown(f"""
-                    <div class="mini-label">
-                        <div class="specs-small">
-                            <h5 style="text-align:center; margin-bottom:5px;">{brand_sel} {model_sel}</h5>
+                    <div class="slim-label">
+                        <div class="specs-slim">
+                            <h5 style="text-align:center; margin-bottom:5px;">{brand_sel}<br>{model_sel}</h5>
                             {specs_html}
                         </div>
-                        <div class="price-mini">
+                        <div class="price-slim">
                             <span class="p20">Pret:</span>
                             <span class="p40">{u_price}</span>
                             <span class="p20">lei</span>
@@ -152,6 +153,6 @@ else:
 
     st.divider()
     if any(phones_to_export):
-        if st.button("🔴 DESCARCĂ PDF COMPACT"):
+        if st.button("🔴 GENEREAZĂ PDF SLIM"):
             pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns)
-            st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_mini.pdf", mime="application/pdf")
+            st.download_button(label="📥 Salvează PDF (45x72mm)", data=pdf_data, file_name="etichete_slim.pdf", mime="application/pdf")
