@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 from fpdf import FPDF
+import requests
+from io import BytesIO
+from PIL import Image, ImageOps
 
 # --- CONFIGURARE ȘI ÎNCĂRCARE DATE ---
 SHEET_ID = '1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA'
@@ -27,15 +30,30 @@ def get_specs_in_order(row_dict, original_columns):
                 clean[col] = str(val).strip()
     return clean
 
-# --- FUNCȚIE GENERARE PDF (45x72mm) ---
-def create_pdf(selected_phones_list, prices, original_columns):
+# --- PROCESARE LOGO (Inversare culori pentru PDF) ---
+def get_black_logo(uploaded_file):
+    img = Image.open(uploaded_file).convert("RGBA")
+    # Dacă logoul e alb pe fundal negru, îl inversăm
+    # Extragem masca de alfa pentru a păstra transparența dacă există
+    r, g, b, a = img.split()
+    rgb_img = Image.merge('RGB', (r, g, b))
+    inverted_img = ImageOps.invert(rgb_img)
+    # Recombinăm cu alfa
+    final_img = Image.merge('RGBA', (inverted_img.split()[0], inverted_img.split()[1], inverted_img.split()[2], a))
+    
+    buf = BytesIO()
+    final_img.save(buf, format="PNG")
+    return buf
+
+# --- FUNCȚIE GENERARE PDF (45x72mm cu Logo) ---
+def create_pdf(selected_phones_list, prices, original_columns, logo_bytes=None):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    margin_left = 20     # Margine mai mare pentru a centra grupul de 3 etichete
-    gutter = 6           # Spațiu între etichete
-    label_width = 45     # Redus cu 10% (de la 50mm)
-    label_height = 72    
+    margin_left = 20
+    gutter = 6
+    label_width = 45
+    label_height = 72
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
@@ -51,26 +69,30 @@ def create_pdf(selected_phones_list, prices, original_columns):
             pdf.set_line_width(0.5)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Titlu (Font adaptat pentru 45mm)
-            pdf.set_y(current_y + 3)
+            # 2. Logo (Negru)
+            if logo_bytes:
+                # Plasăm logoul la începutul etichetei
+                pdf.image(logo_bytes, x=current_x + 7.5, y=current_y + 2, w=30)
+            
+            # 3. Titlu (Sub logo)
+            pdf.set_y(current_y + 12)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8)
             pdf.multi_cell(label_width, 3.2, txt=brand_model, align='C')
             
-            # 3. Specificații
+            # 4. Specificații
             pdf.set_font("Arial", "", 6)
-            pdf.set_y(current_y + 12)
+            pdf.set_y(current_y + 20)
             lines_shown = 0
             for key, val in specs.items():
-                if lines_shown < 9:
+                if lines_shown < 8:
                     pdf.set_x(current_x + 2)
-                    # multi_cell automat pentru a nu ieși din lățimea de 45mm
-                    pdf.multi_cell(label_width - 4, 2.8, txt=f"{key}: {val}", align='L')
+                    pdf.multi_cell(label_width - 4, 2.7, txt=f"{key}: {val}", align='L')
                     lines_shown += 1
             
-            # 4. Rubrica Preț (Adaptată la 45mm)
+            # 5. Rubrica Preț
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 14)
+            pdf.set_y(current_y + label_height - 13)
             pdf.set_x(current_x)
             
             pdf.set_font("Arial", "B", 9) 
@@ -85,35 +107,36 @@ def create_pdf(selected_phones_list, prices, original_columns):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete 45x72mm", layout="wide")
+st.set_page_config(page_title="Generator Etichete Express Credit", layout="wide")
 
+# CSS pentru previzualizarea logoului negru
 st.markdown("""
     <style>
     .slim-label {
         border: 2px solid #FF0000;
         border-radius: 8px;
-        padding: 10px;
+        padding: 5px;
         background-color: white;
-        width: 100%;
-        max-width: 220px; /* Reducere vizuală */
-        min-height: 320px;
-        margin: 0 auto;
+        min-height: 350px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
     }
+    .logo-placeholder { text-align: center; margin-bottom: 5px; font-weight: bold; color: black; }
     .specs-slim { font-size: 10px; line-height: 1.1; }
-    .price-slim {
-        text-align: center;
-        border-top: 1px solid #ff0000;
-        padding-top: 5px;
-    }
-    .p20 { font-size: 16px; font-weight: bold; color: #FF0000; }
-    .p40 { font-size: 32px; font-weight: bold; color: #FF0000; }
+    .price-slim { text-align: center; border-top: 1px solid #ff0000; padding-top: 5px; }
+    .p20 { font-size: 15px; font-weight: bold; color: #FF0000; }
+    .p40 { font-size: 30px; font-weight: bold; color: #FF0000; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📱 Etichete Super Slim (45x72mm)")
+st.title("📱 Generator Etichete cu Logo (Express Credit)")
+
+# Încărcare Logo
+logo_file = st.file_uploader("Încarcă logoul (logo.png)", type=["png", "jpg"])
+processed_logo = None
+if logo_file:
+    processed_logo = get_black_logo(logo_file)
 
 if df.empty:
     st.error("Eroare date.")
@@ -135,12 +158,13 @@ else:
                     prices_to_export[i] = u_price
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns)
-                    specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:9]])
+                    specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:8]])
                     
                     st.markdown(f"""
                     <div class="slim-label">
+                        <div class="logo-placeholder">EXPRESS CREDIT AMANET</div>
                         <div class="specs-slim">
-                            <h5 style="text-align:center; margin-bottom:5px;">{brand_sel}<br>{model_sel}</h5>
+                            <h6 style="text-align:center; margin:2px 0;">{brand_sel} {model_sel}</h6>
                             {specs_html}
                         </div>
                         <div class="price-slim">
@@ -152,7 +176,9 @@ else:
                     """, unsafe_allow_html=True)
 
     st.divider()
-    if any(phones_to_export):
-        if st.button("🔴 GENEREAZĂ PDF SLIM"):
-            pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns)
-            st.download_button(label="📥 Salvează PDF (45x72mm)", data=pdf_data, file_name="etichete_slim.pdf", mime="application/pdf")
+    if any(phones_to_export) and logo_file:
+        if st.button("🔴 GENEREAZĂ PDF FINAL"):
+            pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns, processed_logo)
+            st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_cu_logo.pdf", mime="application/pdf")
+    elif not logo_file:
+        st.warning("Vă rugăm să încărcați logoul pentru a activa descărcarea PDF-ului.")
