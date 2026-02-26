@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from fpdf import FPDF
-import requests
 from io import BytesIO
 from PIL import Image, ImageOps
 
@@ -30,23 +29,24 @@ def get_specs_in_order(row_dict, original_columns):
                 clean[col] = str(val).strip()
     return clean
 
-# --- PROCESARE LOGO (Inversare culori pentru PDF) ---
-def get_black_logo(uploaded_file):
+def process_logo_to_black(uploaded_file):
+    """Transformă logoul alb-pe-negru în negru-pe-alb/transparent."""
     img = Image.open(uploaded_file).convert("RGBA")
-    # Dacă logoul e alb pe fundal negru, îl inversăm
-    # Extragem masca de alfa pentru a păstra transparența dacă există
+    # Separăm canalele
     r, g, b, a = img.split()
     rgb_img = Image.merge('RGB', (r, g, b))
-    inverted_img = ImageOps.invert(rgb_img)
-    # Recombinăm cu alfa
-    final_img = Image.merge('RGBA', (inverted_img.split()[0], inverted_img.split()[1], inverted_img.split()[2], a))
+    # Inversăm culorile (albul devine negru)
+    inverted_rgb = ImageOps.invert(rgb_img)
+    # Recombinăm cu canalul alfa original
+    final_img = Image.merge('RGBA', (inverted_rgb.split()[0], inverted_rgb.split()[1], inverted_rgb.split()[2], a))
     
     buf = BytesIO()
     final_img.save(buf, format="PNG")
+    buf.seek(0)
     return buf
 
-# --- FUNCȚIE GENERARE PDF (45x72mm cu Logo) ---
-def create_pdf(selected_phones_list, prices, original_columns, logo_bytes=None):
+# --- FUNCȚIE GENERARE PDF (45x72mm cu Logo Negru) ---
+def create_pdf(selected_phones_list, prices, original_columns, logo_data):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
@@ -69,20 +69,20 @@ def create_pdf(selected_phones_list, prices, original_columns, logo_bytes=None):
             pdf.set_line_width(0.5)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Logo (Negru)
-            if logo_bytes:
-                # Plasăm logoul la începutul etichetei
-                pdf.image(logo_bytes, x=current_x + 7.5, y=current_y + 2, w=30)
+            # 2. Logo procesat (Negru)
+            if logo_data:
+                # Centrare logo: lățime 35mm într-un cadru de 45mm
+                pdf.image(logo_data, x=current_x + 5, y=current_y + 3, w=35)
             
-            # 3. Titlu (Sub logo)
-            pdf.set_y(current_y + 12)
+            # 3. Titlu (Poziționat sub logo)
+            pdf.set_y(current_y + 13)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8)
             pdf.multi_cell(label_width, 3.2, txt=brand_model, align='C')
             
             # 4. Specificații
             pdf.set_font("Arial", "", 6)
-            pdf.set_y(current_y + 20)
+            pdf.set_y(current_y + 22)
             lines_shown = 0
             for key, val in specs.items():
                 if lines_shown < 8:
@@ -92,7 +92,7 @@ def create_pdf(selected_phones_list, prices, original_columns, logo_bytes=None):
             
             # 5. Rubrica Preț
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 13)
+            pdf.set_y(current_y + label_height - 14)
             pdf.set_x(current_x)
             
             pdf.set_font("Arial", "B", 9) 
@@ -107,39 +107,15 @@ def create_pdf(selected_phones_list, prices, original_columns, logo_bytes=None):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Generator Etichete Express Credit", layout="wide")
+st.set_page_config(page_title="Etichete Express Credit", layout="wide")
 
-# CSS pentru previzualizarea logoului negru
-st.markdown("""
-    <style>
-    .slim-label {
-        border: 2px solid #FF0000;
-        border-radius: 8px;
-        padding: 5px;
-        background-color: white;
-        min-height: 350px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-    }
-    .logo-placeholder { text-align: center; margin-bottom: 5px; font-weight: bold; color: black; }
-    .specs-slim { font-size: 10px; line-height: 1.1; }
-    .price-slim { text-align: center; border-top: 1px solid #ff0000; padding-top: 5px; }
-    .p20 { font-size: 15px; font-weight: bold; color: #FF0000; }
-    .p40 { font-size: 30px; font-weight: bold; color: #FF0000; }
-    </style>
-    """, unsafe_allow_html=True)
+st.title("📱 Generator Etichete Slim (45x72mm)")
 
-st.title("📱 Generator Etichete cu Logo (Express Credit)")
-
-# Încărcare Logo
-logo_file = st.file_uploader("Încarcă logoul (logo.png)", type=["png", "jpg"])
-processed_logo = None
-if logo_file:
-    processed_logo = get_black_logo(logo_file)
+# Widget încărcare logo
+uploaded_logo = st.file_uploader("Încarcă logoul original (cel negru cu scris alb)", type=["png", "jpg", "jpeg"])
 
 if df.empty:
-    st.error("Eroare date.")
+    st.error("Nu s-au putut încărca datele din tabel.")
 else:
     cols = st.columns(3)
     phones_to_export = [None, None, None]
@@ -147,10 +123,12 @@ else:
 
     for i, col in enumerate(cols):
         with col:
-            brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
+            st.subheader(f"Telefon {i+1}")
+            brand_sel = st.selectbox(f"Brand", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
+            
             if brand_sel != "-":
-                model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
-                u_price = st.number_input(f"Pret lei {i+1}", min_value=0, key=f"p_{i}")
+                model_sel = st.selectbox(f"Model", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
+                u_price = st.number_input(f"Preț lei", min_value=0, key=f"p_{i}")
                 
                 if model_sel != "-":
                     raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
@@ -160,25 +138,29 @@ else:
                     ordered_specs = get_specs_in_order(raw_specs, df.columns)
                     specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:8]])
                     
+                    # Previzualizare stilizată
                     st.markdown(f"""
-                    <div class="slim-label">
-                        <div class="logo-placeholder">EXPRESS CREDIT AMANET</div>
-                        <div class="specs-slim">
-                            <h6 style="text-align:center; margin:2px 0;">{brand_sel} {model_sel}</h6>
+                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 8px; background: white; min-height: 350px;">
+                        <div style="text-align: center; color: black; font-weight: bold; margin-bottom: 10px;">LOGO BLACK VERSION</div>
+                        <div style="font-size: 10px; color: #333;">
+                            <h6 style="text-align:center; color: black; margin-bottom: 5px;">{brand_sel} {model_sel}</h6>
                             {specs_html}
                         </div>
-                        <div class="price-slim">
-                            <span class="p20">Pret:</span>
-                            <span class="p40">{u_price}</span>
-                            <span class="p20">lei</span>
+                        <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 10px; padding-top: 5px;">
+                            <span style="font-size: 14px; color: #FF0000; font-weight: bold;">Pret:</span>
+                            <span style="font-size: 28px; color: #FF0000; font-weight: bold;">{u_price}</span>
+                            <span style="font-size: 14px; color: #FF0000; font-weight: bold;">lei</span>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
     st.divider()
-    if any(phones_to_export) and logo_file:
-        if st.button("🔴 GENEREAZĂ PDF FINAL"):
-            pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns, processed_logo)
-            st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_cu_logo.pdf", mime="application/pdf")
-    elif not logo_file:
-        st.warning("Vă rugăm să încărcați logoul pentru a activa descărcarea PDF-ului.")
+
+    if any(phones_to_export):
+        if uploaded_logo:
+            if st.button("🔴 DESCARCĂ PDF CU LOGO"):
+                black_logo = process_logo_to_black(uploaded_logo)
+                pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns, black_logo)
+                st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_express_credit.pdf", mime="application/pdf")
+        else:
+            st.info("ℹ️ Încarcă logoul în partea de sus pentru a activa descărcarea PDF-ului.")
