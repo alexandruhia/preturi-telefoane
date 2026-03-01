@@ -20,19 +20,36 @@ df = load_data()
 
 def get_specs_in_order(row_dict, original_columns, battery_override=None):
     clean = {}
-    battery_col_found = False
+    
+    # Identificăm indexul coloanei Capacitate Baterie (dacă există)
+    cap_bat_col = None
+    for col in original_columns:
+        if "capacitate baterie" in col.lower():
+            cap_bat_col = col
+            break
+
+    # Reconstruim dicționarul respectând ordinea
     for col in original_columns:
         if col in ["Brand", "Model"]: continue
-        is_battery_col = col.lower() in ["sanatate baterie", "sănătate baterie", "baterie", "battery"]
-        if is_battery_col:
-            battery_col_found = True
-            if battery_override: clean["Sanatate baterie"] = f"{battery_override}%"
+        
+        # Sărim peste orice coloană originală de sănătate baterie (folosim override-ul)
+        if col.lower() in ["sanatate baterie", "sănătate baterie", "baterie", "battery"]:
             continue
+
         val = row_dict.get(col)
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
-    if not battery_col_found and battery_override:
-        clean["Sanatate baterie"] = f"{battery_override}%"
+            
+            # DACĂ am adăugat Capacitate Baterie, inserăm imediat după ea Sanatate Baterie
+            if col == cap_bat_col and battery_override:
+                clean["Sanatate baterie"] = f"{battery_override}%"
+
+    # Dacă Sanatate Baterie nu a fost adăugată (pt că n-a găsit Capacitate Baterie), o punem prima
+    if battery_override and "Sanatate baterie" not in clean:
+        new_clean = {"Sanatate baterie": f"{battery_override}%"}
+        new_clean.update(clean)
+        return new_clean
+        
     return clean
 
 # --- FUNCȚIE GENERARE PDF (40x60mm) ---
@@ -60,10 +77,9 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, origina
             
             pdf.set_y(current_y + 11)
             lines_shown = 0
-            # Am mărit fontul la 7pt
             font_size_specs = 7 
             for key, val in specs.items():
-                if lines_shown < 8: # Am redus la 8 linii pentru a compensa fontul mai mare
+                if lines_shown < 9:
                     clean_key = key.replace('ă','a').replace('ș','s').replace('ț','t').replace('â','a').replace('î','i')
                     clean_val = str(val).replace('ă','a').replace('ș','s').replace('ț','t').replace('â','a').replace('î','i')
                     pdf.set_x(current_x + 2)
@@ -71,11 +87,11 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, origina
                     pdf.write(3.5, f"{clean_key}: ") 
                     pdf.set_font("Arial", "I", font_size_specs)
                     pdf.write(3.5, f"{clean_val}")    
-                    pdf.ln(3.8) # Spațiere verticală ușor mărită
+                    pdf.ln(3.5) 
                     lines_shown += 1
             
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 13)
+            pdf.set_y(current_y + label_height - 12)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8) 
             pdf.cell(10, 7, txt="Pret:", align='R')
@@ -87,7 +103,7 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, origina
             pdf.set_text_color(0, 0, 0)
             if full_codes[i]:
                 pdf.set_font("Arial", "", 5.5)
-                pdf.set_y(current_y + label_height - 4.5)
+                pdf.set_y(current_y + label_height - 4.2)
                 pdf.set_x(current_x)
                 pdf.cell(label_width, 3, txt=full_codes[i], align='C')
     return pdf.output(dest='S').encode('latin-1', 'replace')
@@ -126,15 +142,14 @@ else:
                     battery_to_export[i] = battery_percent
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent)
-                    # HTML preview reflectă fontul mai mare
-                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:8]])
+                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:9]])
                     
                     st.markdown(f"""
                     <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 320px; margin: auto; font-family: Arial;">
                         <h6 style="text-align:center; color: black; margin-bottom: 8px; font-weight: bold; font-size: 13px; text-transform: uppercase;">
                             {brand_sel} {model_sel}
                         </h6>
-                        <div style="font-size: 11.5px; color: #333; line-height: 1.3; height: 165px; overflow: hidden;">
+                        <div style="font-size: 11.5px; color: #333; line-height: 1.3; height: 175px; overflow: hidden;">
                             {specs_html}
                         </div>
                         <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 10px; padding-top: 5px;">
