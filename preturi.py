@@ -21,66 +21,49 @@ df = load_data()
 def get_specs_in_order(row_dict, original_columns, battery_override=None):
     clean = {}
     battery_col_found = False
-    
     for col in original_columns:
-        if col in ["Brand", "Model"]:
-            continue
-            
+        if col in ["Brand", "Model"]: continue
         is_battery_col = col.lower() in ["sanatate baterie", "sănătate baterie", "baterie", "battery"]
-        
         if is_battery_col:
             battery_col_found = True
-            if battery_override:
-                clean["Sanatate baterie"] = f"{battery_override}%"
+            if battery_override: clean["Sanatate baterie"] = f"{battery_override}%"
             continue
-
         val = row_dict.get(col)
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
-            
     if not battery_col_found and battery_override:
         clean["Sanatate baterie"] = f"{battery_override}%"
-        
     return clean
 
 # --- FUNCȚIE GENERARE PDF (40x60mm) ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
-    
-    margin_left = 15
-    gutter = 5           
-    label_width = 40     
-    label_height = 60    
+    margin_left, gutter, label_width, label_height = 15, 5, 40, 60
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
             specs = get_specs_in_order(phone, original_columns, battery_values[i])
             brand_model = f"{phone.get('Brand', '')} {phone.get('Model', '')}".upper()
             price_val = str(prices[i])
-            
             current_x = margin_left + (i * (label_width + gutter))
             current_y = 25
             
-            # Chenar
             pdf.set_draw_color(255, 0, 0)
             pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # Titlu
             pdf.set_y(current_y + 3)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8)
             pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
             
-            # Specificații
             pdf.set_y(current_y + 11)
             lines_shown = 0
             for key, val in specs.items():
                 if lines_shown < 9:
-                    clean_key = key.replace('ă', 'a').replace('ș', 's').replace('ț', 't').replace('â', 'a').replace('î', 'i')
-                    clean_val = str(val).replace('ă', 'a').replace('ș', 's').replace('ț', 't').replace('â', 'a').replace('î', 'i')
-                    
+                    clean_key = key.replace('ă','a').replace('ș','s').replace('ț','t').replace('â','a').replace('î','i')
+                    clean_val = str(val).replace('ă','a').replace('ș','s').replace('ț','t').replace('â','a').replace('î','i')
                     pdf.set_x(current_x + 2)
                     pdf.set_font("Arial", "B", 6.2)
                     pdf.write(3, f"{clean_key}: ") 
@@ -89,29 +72,26 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, origina
                     pdf.ln(3.2)
                     lines_shown += 1
             
-            # Preț
             pdf.set_text_color(255, 0, 0)
             pdf.set_y(current_y + label_height - 13)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8) 
-            pdf.cell(10, 7, txt="Pret:", ln=False, align='R')
+            pdf.cell(10, 7, txt="Pret:", align='R')
             pdf.set_font("Arial", "B", 15) 
-            pdf.cell(18, 7, txt=price_val, ln=False, align='C')
+            pdf.cell(18, 7, txt=price_val, align='C')
             pdf.set_font("Arial", "B", 8) 
             pdf.cell(6, 7, txt="lei", ln=True, align='L')
             
-            # Bon Consignatie (Ex: B32451@29)
             pdf.set_text_color(0, 0, 0)
             if full_codes[i]:
                 pdf.set_font("Arial", "", 5.5)
                 pdf.set_y(current_y + label_height - 4.5)
                 pdf.set_x(current_x)
-                pdf.cell(label_width, 3, txt=full_codes[i], ln=True, align='C')
-            
+                pdf.cell(label_width, 3, txt=full_codes[i], align='C')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete Compacte 40x60", layout="wide")
+st.set_page_config(page_title="Etichete 40x60", layout="wide")
 st.title("📱 Generator Etichete 40x60mm")
 
 if df.empty:
@@ -127,16 +107,14 @@ else:
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
                 
-                # --- NOILE CASUTE PENTRU BON CONSIGNATIE ---
-                st.write(f"**Bon consignație {i+1}**")
+                # --- MODIFICARE AICI: Câmpurile pentru Bon ---
                 c1, c2 = st.columns([2, 1])
                 with c1:
-                    b_digits = st.text_input("Cifre după B", value="32451", key=f"b_dig_{i}")
+                    b_digits = st.text_input(f"Bon consignatie {i+1}", value="32451", key=f"b_dig_{i}")
                 with c2:
-                    ag_val = st.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}")
+                    ag_val = st.selectbox(f"AG {i+1}", list(range(1, 56)), index=28, key=f"ag_val_{i}")
                 
                 full_consignation_code = f"B{b_digits}@{ag_val}"
-                
                 battery_percent = st.number_input(f"Sănătate baterie % {i+1}", 1, 100, 100, key=f"bat_{i}")
 
                 if model_sel != "-":
@@ -169,6 +147,6 @@ else:
         st.download_button(
             label="🔴 DESCARCĂ PDF (40x60mm)",
             data=create_pdf(phones_to_export, prices_to_export, codes_to_export, battery_to_export, df.columns),
-            file_name="etichete_consignatie.pdf",
+            file_name="etichete_40x60.pdf",
             mime="application/pdf"
         )
