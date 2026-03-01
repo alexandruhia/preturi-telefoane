@@ -33,7 +33,6 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
     clean = {}
     cap_bat_col = None
     
-    # Identificăm coloana de Capacitate Baterie
     for col in original_columns:
         if "capacitate baterie" in col.lower():
             cap_bat_col = col
@@ -47,15 +46,12 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
             
-            # --- MODIFICARE ORDINE AICI ---
-            # Imediat după ce am adăugat Capacitate Baterie, inserăm Accesorii
             if col == cap_bat_col:
                 if accessories_list:
                     clean["Accesorii"] = ", ".join(accessories_list)
                 if battery_override:
                     clean["Sănătate baterie"] = f"{battery_override}%"
 
-    # Backup: dacă nu găsește coloana specifică, le pune la început
     if battery_override and "Sănătate baterie" not in clean:
         temp = {}
         if accessories_list: temp["Accesorii"] = ", ".join(accessories_list)
@@ -65,7 +61,7 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         
     return clean
 
-# --- FUNCȚIE GENERARE PDF ---
+# --- FUNCȚIE GENERARE PDF (Limita 10 rânduri) ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
@@ -86,22 +82,29 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.set_y(current_y + 3)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8)
-            pdf.multi_cell(label_width, 3.5, txt=clean_for_pdf(brand_model), align='C')
+            pdf.multi_cell(label_width, 3.2, txt=clean_for_pdf(brand_model), align='C')
             
-            pdf.set_y(current_y + 11)
+            pdf.set_y(current_y + 10.5)
             lines_shown = 0
+            # Fontul rămâne generos, dar am optimizat spațierea pentru a permite 10 linii
+            font_size_specs = 6.8
             for key, val in specs.items():
-                if lines_shown < 9:
+                if lines_shown < 10: # Limita crescută la 10 rânduri
                     pdf.set_x(current_x + 2)
-                    pdf.set_font("Arial", "B", 6.8)
+                    pdf.set_font("Arial", "B", font_size_specs)
                     pdf.write(3.2, f"{clean_for_pdf(key)}: ") 
-                    pdf.set_font("Arial", "I", 6.8)
-                    pdf.write(3.2, clean_for_pdf(val))    
-                    pdf.ln(3.4) 
+                    pdf.set_font("Arial", "I", font_size_specs)
+                    
+                    # Tăiem textul accesoriilor dacă e prea lung pentru un singur rând
+                    raw_val = clean_for_pdf(val)
+                    display_val = raw_val if len(raw_val) < 28 else raw_val[:25] + "..."
+                    
+                    pdf.write(3.2, display_val)    
+                    pdf.ln(3.2) # Spațiere optimizată
                     lines_shown += 1
             
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 12.5)
+            pdf.set_y(current_y + label_height - 12)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8) 
             pdf.cell(10, 7, txt="Pret:", align='R')
@@ -120,8 +123,8 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete 40x60", layout="wide")
-st.title("📱 Generator Etichete 40x60mm")
+st.set_page_config(page_title="Etichete 40x60 Pro", layout="wide")
+st.title("📱 Generator Etichete (10 Linii)")
 
 if df.empty:
     st.error("Eroare la baza de date.")
@@ -152,12 +155,12 @@ else:
                     phones_to_export[i], prices_to_export[i], codes_to_export[i], battery_to_export[i], acc_to_export[i] = raw_specs, u_price, full_code, battery_percent, selected_acc
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent, selected_acc)
-                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:9]])
+                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
                     
                     st.markdown(f"""
                     <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 335px; margin: auto; font-family: Arial;">
                         <h6 style="text-align:center; color: black; margin-bottom: 8px; font-weight: bold; font-size: 13px; text-transform: uppercase;">{brand_sel} {model_sel}</h6>
-                        <div style="font-size: 11.5px; color: #333; line-height: 1.3; height: 185px; overflow: hidden;">{specs_html}</div>
+                        <div style="font-size: 11px; color: #333; line-height: 1.25; height: 185px; overflow: hidden;">{specs_html}</div>
                         <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 10px; padding-top: 5px;">
                             <span style="font-size: 19px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
                             <div style="font-size:8.5px; color: gray; margin-top: 2px;">{full_code}</div>
@@ -167,4 +170,4 @@ else:
     st.divider()
     if any(phones_to_export):
         pdf_out = create_pdf(phones_to_export, prices_to_export, codes_to_export, battery_to_export, acc_to_export, df.columns)
-        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete.pdf", mime="application/pdf")
+        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_10_linii.pdf", mime="application/pdf")
