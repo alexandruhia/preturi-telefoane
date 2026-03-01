@@ -60,16 +60,18 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, origina
             
             pdf.set_y(current_y + 11)
             lines_shown = 0
+            # Am mărit fontul la 7pt
+            font_size_specs = 7 
             for key, val in specs.items():
-                if lines_shown < 9:
+                if lines_shown < 8: # Am redus la 8 linii pentru a compensa fontul mai mare
                     clean_key = key.replace('ă','a').replace('ș','s').replace('ț','t').replace('â','a').replace('î','i')
                     clean_val = str(val).replace('ă','a').replace('ș','s').replace('ț','t').replace('â','a').replace('î','i')
                     pdf.set_x(current_x + 2)
-                    pdf.set_font("Arial", "B", 6.2)
-                    pdf.write(3, f"{clean_key}: ") 
-                    pdf.set_font("Arial", "I", 6.2)
-                    pdf.write(3, f"{clean_val}")    
-                    pdf.ln(3.2)
+                    pdf.set_font("Arial", "B", font_size_specs)
+                    pdf.write(3.5, f"{clean_key}: ") 
+                    pdf.set_font("Arial", "I", font_size_specs)
+                    pdf.write(3.5, f"{clean_val}")    
+                    pdf.ln(3.8) # Spațiere verticală ușor mărită
                     lines_shown += 1
             
             pdf.set_text_color(255, 0, 0)
@@ -107,7 +109,6 @@ else:
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
                 
-                # --- MODIFICARE AICI: Câmpurile pentru Bon ---
                 c1, c2 = st.columns([2, 1])
                 with c1:
                     b_digits = st.text_input(f"Bon consignatie {i+1}", value="32451", key=f"b_dig_{i}")
@@ -125,14 +126,15 @@ else:
                     battery_to_export[i] = battery_percent
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent)
-                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:9]])
+                    # HTML preview reflectă fontul mai mare
+                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:8]])
                     
                     st.markdown(f"""
                     <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 320px; margin: auto; font-family: Arial;">
                         <h6 style="text-align:center; color: black; margin-bottom: 8px; font-weight: bold; font-size: 13px; text-transform: uppercase;">
                             {brand_sel} {model_sel}
                         </h6>
-                        <div style="font-size: 10px; color: #333; line-height: 1.2; height: 165px; overflow: hidden;">
+                        <div style="font-size: 11.5px; color: #333; line-height: 1.3; height: 165px; overflow: hidden;">
                             {specs_html}
                         </div>
                         <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 10px; padding-top: 5px;">
