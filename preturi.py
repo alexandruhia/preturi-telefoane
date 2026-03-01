@@ -60,12 +60,17 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         clean["Accesorii"] = ", ".join(accessories_list)
     return clean
 
-# --- FUNCȚIE GENERARE PDF ---
+# --- FUNCȚIE GENERARE PDF (UNA LÂNGĂ ALTA) ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, stocare_values, ram_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
-    margin_left, gutter, label_width, label_height = 15, 5, 40, 60
     
+    # Dimensiuni pentru 3 etichete pe lățimea A4 (210mm)
+    label_width = 60  
+    label_height = 80 
+    margin_left = (210 - (label_width * 3)) / 2  # Centrare grup
+    current_y = 20
+
     local_logo_path = "temp_logo.png"
     try:
         resp = requests.get(LOGO_URL)
@@ -77,10 +82,11 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
 
     for i, phone in enumerate(selected_phones_list):
         if phone:
+            # Poziționare orizontală (i=0 -> stânga, i=1 -> mijloc, i=2 -> dreapta)
+            current_x = margin_left + (i * label_width)
+            
             specs = get_specs_in_order(phone, original_columns, battery_values[i], acc_values[i], stocare_values[i], ram_values[i])
             brand_model = f"{phone.get('Brand', '')} {phone.get('Model', '')}".upper()
-            current_x = margin_left + (i * (label_width + gutter))
-            current_y = 25
             
             # Chenar
             pdf.set_draw_color(255, 0, 0)
@@ -88,16 +94,16 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.rect(current_x, current_y, label_width, label_height)
             
             # Titlu
-            pdf.set_y(current_y + 2.5)
+            pdf.set_y(current_y + 3)
             pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 9.5)
-            pdf.multi_cell(label_width, 3.8, txt=clean_for_pdf(brand_model), align='C')
+            pdf.set_font("Arial", "B", 9)
+            pdf.multi_cell(label_width, 4, txt=clean_for_pdf(brand_model), align='C')
             
             # Specificații
-            start_specs_y = current_y + 11.5
+            start_specs_y = pdf.get_y() + 2
             pdf.set_y(start_specs_y)
             display_items = list(specs.items())[:10]
-            line_step = 3.3
+            line_step = 3.5
             for key, val in display_items:
                 pdf.set_x(current_x + 2)
                 pdf.set_font("Arial", "B", 6.8)
@@ -107,53 +113,38 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                 pdf.write(line_step, v_str if len(v_str) < 28 else v_str[:25] + "...")    
                 pdf.ln(line_step)
             
-            # Bloc Preț și Cod
-            end_specs_y = start_specs_y + (len(display_items) * line_step)
+            # Bloc Preț
+            price_area_y = current_y + label_height - 22
             pdf.set_draw_color(255, 0, 0)
-            pdf.line(current_x + 5, end_specs_y + 1, current_x + label_width - 5, end_specs_y + 1)
+            pdf.line(current_x + 4, price_area_y, current_x + label_width - 4, price_area_y)
             
-            # --- PREȚ (CIFRE MARI + lei MICI) ---
             pdf.set_text_color(255, 0, 0)
             price_str = str(prices[i])
-            
-            # Calculăm lățimea totală pentru a centra grupul
-            pdf.set_font("Arial", "B", 22)
+            pdf.set_font("Arial", "B", 20)
             w_digits = pdf.get_string_width(price_str)
-            pdf.set_font("Arial", "B", 9)
+            pdf.set_font("Arial", "B", 8)
             w_lei = pdf.get_string_width(" lei")
-            total_w = w_digits + w_lei
             
-            # Poziționare start pentru centrare
-            start_price_x = current_x + (label_width - total_w) / 2
-            pdf.set_y(end_specs_y + 2)
-            pdf.set_x(start_price_x)
-            
-            # Scrie cifrele
-            pdf.set_font("Arial", "B", 22)
+            start_price_x = current_x + (label_width - (w_digits + w_lei)) / 2
+            pdf.set_xy(start_price_x, price_area_y + 1.5)
+            pdf.set_font("Arial", "B", 20)
             pdf.write(10, price_str)
-            
-            # Scrie "lei"
-            pdf.set_y(end_specs_y + 4.5) # Coborâm puțin baza pentru "lei" să fie aliniat frumos
-            pdf.set_x(start_price_x + w_digits)
-            pdf.set_font("Arial", "B", 9)
+            pdf.set_font("Arial", "B", 8)
             pdf.write(10, " lei")
             
-            # --- COD (ALINIAT DREAPTA) ---
+            # Cod
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Arial", "B", 6.5)
-            pdf.set_y(end_specs_y + 10.5)
-            pdf.set_x(current_x)
-            # Cell cu align='R' și un mic padding la dreapta (38mm în loc de 40mm)
+            pdf.set_xy(current_x, price_area_y + 9)
             pdf.cell(label_width - 2, 3, txt=clean_for_pdf(full_codes[i]), align='R')
 
             # Footer Logo
-            footer_h = 9.5
+            footer_h = 9
             pdf.set_fill_color(255, 0, 0)
             pdf.rect(current_x + 0.1, current_y + label_height - footer_h - 0.1, label_width - 0.2, footer_h, 'F')
-            
-            if local_logo_path and os.path.exists(local_logo_path):
-                pdf.image(local_logo_path, x=current_x + 4, y=current_y + label_height - footer_h + 1.2, w=32)
-            
+            if local_logo_path:
+                pdf.image(local_logo_path, x=current_x + (label_width - 35)/2, y=current_y + label_height - footer_h + 1.2, w=35)
+                
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAȚĂ STREAMLIT ---
@@ -183,11 +174,9 @@ else:
             
             if brand_sel != "-" and model_sel != "-":
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
-                
                 cb1, cb2 = st.columns([2, 1])
                 b_digits = cb1.text_input("Cod B", value="32451", key=f"b_dig_{i}")
                 ag_val = cb2.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}")
-                
                 battery_percent = st.number_input(f"Baterie (%) {i+1}", 1, 100, 100, key=f"bat_{i}")
                 
                 st.write("**Accesorii:**")
@@ -198,7 +187,7 @@ else:
                 p_exp[i], pr_exp[i], c_exp[i], b_exp[i], a_exp[i] = raw_specs, u_price, f"B{b_digits}@{ag_val}", battery_percent, selected_acc
                 s_exp[i], r_exp[i] = s_val, r_val
                 
-                # Previzualizare HTML (aproximativă pentru a semăna cu PDF-ul)
+                # Previzualizare HTML
                 ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent, selected_acc, s_val, r_val)
                 specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
                 
@@ -219,6 +208,17 @@ else:
                 </div>""", unsafe_allow_html=True)
 
     st.divider()
+    
+    # --- BUTON EXPORT PE MIJLOC ---
     if any(p_exp):
         pdf_out = create_pdf(p_exp, pr_exp, c_exp, b_exp, a_exp, s_exp, r_exp, df.columns)
-        st.download_button(label="🔴 DESCARCĂ PDF FINAL", data=pdf_out, file_name="etichete_expresscredit.pdf", mime="application/pdf")
+        
+        _, btn_col, _ = st.columns([1, 1, 1])
+        with btn_col:
+            st.download_button(
+                label="🔴 DESCARCĂ PDF FINAL (TOATE 3)", 
+                data=pdf_out, 
+                file_name="etichete_expresscredit.pdf", 
+                mime="application/pdf",
+                use_container_width=True
+            )
