@@ -18,17 +18,23 @@ def load_data():
 
 df = load_data()
 
-def get_specs_in_order(row_dict, original_columns):
+def get_specs_in_order(row_dict, original_columns, battery_override=None):
     clean = {}
     for col in original_columns:
         if col not in ["Brand", "Model"]:
             val = row_dict.get(col)
+
+            # Dacă este coloana Sanatate baterie și avem override
+            if col.lower() == "sanatate baterie" and battery_override:
+                clean[col] = f"{battery_override}%"
+                continue
+
             if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
                 clean[col] = str(val).strip()
     return clean
 
 # --- FUNCȚIE GENERARE PDF (45x72mm) ---
-def create_pdf(selected_phones_list, prices, ag_values, original_columns):
+def create_pdf(selected_phones_list, prices, ag_values, battery_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
@@ -39,7 +45,7 @@ def create_pdf(selected_phones_list, prices, ag_values, original_columns):
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
-            specs = get_specs_in_order(phone, original_columns)
+            specs = get_specs_in_order(phone, original_columns, battery_values[i])
             brand_model = f"{phone.get('Brand', '')} {phone.get('Model', '')}".upper()
             price_val = str(prices[i])
             
@@ -95,7 +101,7 @@ def create_pdf(selected_phones_list, prices, ag_values, original_columns):
 # --- INTERFAȚĂ STREAMLIT ---
 st.set_page_config(page_title="Etichete 45x72mm", layout="wide")
 
-st.title("📱 Generator Etichete Slim (Fără Logo)")
+st.title("📱 Generator Etichete Slim")
 
 if df.empty:
     st.error("Nu s-au putut încărca datele.")
@@ -104,6 +110,7 @@ else:
     phones_to_export = [None, None, None]
     prices_to_export = [0, 0, 0]
     ag_to_export = [None, None, None]
+    battery_to_export = [None, None, None]
 
     for i, col in enumerate(cols):
         with col:
@@ -127,9 +134,15 @@ else:
                 )
 
                 ag_number = st.selectbox(
-                    f"Număr (1-55) {i+1}",
+                    f"Număr cod {i+1}",
                     list(range(1, 56)),
                     key=f"ag_{i}"
+                )
+
+                battery_percent = st.selectbox(
+                    f"Sanatate baterie (%) {i+1}",
+                    list(range(1, 101)),
+                    key=f"bat_{i}"
                 )
 
                 if model_sel != "-":
@@ -141,14 +154,20 @@ else:
                     phones_to_export[i] = raw_specs
                     prices_to_export[i] = u_price
                     ag_to_export[i] = ag_number
+                    battery_to_export[i] = battery_percent
                     
-                    ordered_specs = get_specs_in_order(raw_specs, df.columns)
+                    ordered_specs = get_specs_in_order(
+                        raw_specs,
+                        df.columns,
+                        battery_percent
+                    )
+
                     specs_html = "".join(
                         [f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:10]]
                     )
                     
                     st.markdown(f"""
-                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 8px; background: white; min-height: 320px;">
+                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 8px; background: white; min-height: 340px;">
                         <h6 style="text-align:center; color: black; margin-bottom: 10px;">
                             {brand_sel} {model_sel}
                         </h6>
@@ -174,6 +193,7 @@ else:
                 phones_to_export,
                 prices_to_export,
                 ag_to_export,
+                battery_to_export,
                 df.columns
             )
 
