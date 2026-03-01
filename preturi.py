@@ -58,7 +58,7 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         clean["Accesorii"] = ", ".join(accessories_list)
     return clean
 
-# --- FUNCȚIE GENERARE PDF (Preț sub specificații) ---
+# --- FUNCȚIE GENERARE PDF (Totul sub specificații) ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, stocare_values, ram_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
@@ -96,33 +96,31 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                 pdf.write(line_step, v_str if len(v_str) < 28 else v_str[:25] + "...")    
                 pdf.ln(line_step)
             
-            # 3. Calcul Poziție Preț (Imediat sub specificații)
-            # Calculăm unde s-a terminat textul: Start + (nr_linii * pas)
+            # 3. Calcul Poziție Bloc Preț + Cod (Imediat sub specificații)
             end_specs_y = start_specs_y + (len(display_items) * line_step)
             
             # Linia roșie sub specificații
             pdf.set_draw_color(255, 0, 0)
             pdf.line(current_x + 5, end_specs_y + 1, current_x + label_width - 5, end_specs_y + 1)
             
-            # Prețul sub linie
+            # Prețul
             pdf.set_text_color(255, 0, 0)
             pdf.set_y(end_specs_y + 2)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 17) 
-            pdf.cell(label_width, 8, txt=f"{prices[i]} lei", align='C')
+            pdf.cell(label_width, 8, txt=f"{prices[i]} lei", align='C', ln=True)
             
-            # 4. Codul rămâne totuși la bază (pentru aspect curat)
+            # Codul (B-ul) imediat sub preț (fără ln/spatiu mare)
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Arial", "", 5.5)
-            pdf.set_y(current_y + label_height - 4.5)
             pdf.set_x(current_x)
-            pdf.cell(label_width, 3, txt=clean_for_pdf(full_codes[i]), align='C')
-    
+            pdf.cell(label_width, 2.5, txt=clean_for_pdf(full_codes[i]), align='C')
+            
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete 40x60 Pro", layout="wide")
-st.title("📱 Generator Etichete (Preț Dinamic)")
+st.set_page_config(page_title="Etichete Compacte", layout="wide")
+st.title("📱 Generator Etichete (Fără Spații Goale)")
 
 if df.empty:
     st.error("Eroare la baza de date.")
@@ -164,18 +162,17 @@ else:
                     specs_list = list(ordered_specs.items())[:10]
                     specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in specs_list])
                     
-                    # Previzualizarea reflectă acum prețul care se ridică
                     st.markdown(f"""
                     <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; min-height: 250px; margin: auto; font-family: Arial;">
                         <h5 style="text-align:center; color: black; margin-bottom: 5px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
                         <div style="font-size: 10.8px; color: #333; line-height: 1.35;">{specs_html}</div>
                         <div style="text-align: center; border-top: 1.5px solid #ff0000; margin-top: 8px; padding-top: 5px;">
                             <span style="font-size: 22px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
+                            <div style="font-size:8.5px; color: gray; margin-top: 0px;">B{b_digits}@{ag_val}</div>
                         </div>
-                        <div style="text-align: center; font-size:8.5px; color: gray; margin-top: 15px;">B{b_digits}@{ag_val}</div>
                     </div>""", unsafe_allow_html=True)
 
     st.divider()
     if any(p_exp):
         pdf_out = create_pdf(p_exp, pr_exp, c_exp, b_exp, a_exp, s_exp, r_exp, df.columns)
-        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_compacte.pdf", mime="application/pdf")
+        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_compacte_final.pdf", mime="application/pdf")
