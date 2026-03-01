@@ -18,10 +18,8 @@ def load_data():
 
 df = load_data()
 
-# Funcție pentru a curăța textul de caractere care crapă PDF-ul (latin-1)
 def clean_for_pdf(text):
     if not text: return ""
-    # Înlocuim diacriticele cunoscute
     replacements = {
         'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ț': 't',
         'Ă': 'A', 'Â': 'A', 'Î': 'I', 'Ș': 'S', 'Ț': 'T'
@@ -29,12 +27,13 @@ def clean_for_pdf(text):
     t = str(text)
     for k, v in replacements.items():
         t = t.replace(k, v)
-    # Eliminăm orice alt caracter care nu este în setul latin-1 standard
     return t.encode('latin-1', 'replace').decode('latin-1')
 
 def get_specs_in_order(row_dict, original_columns, battery_override=None, accessories_list=None):
     clean = {}
     cap_bat_col = None
+    
+    # Identificăm coloana de Capacitate Baterie
     for col in original_columns:
         if "capacitate baterie" in col.lower():
             cap_bat_col = col
@@ -47,18 +46,26 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         val = row_dict.get(col)
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
+            
+            # --- MODIFICARE ORDINE AICI ---
+            # Imediat după ce am adăugat Capacitate Baterie, inserăm Accesorii
             if col == cap_bat_col:
-                if battery_override: clean["Sănătate baterie"] = f"{battery_override}%"
-                if accessories_list: clean["Accesorii"] = ", ".join(accessories_list)
+                if accessories_list:
+                    clean["Accesorii"] = ", ".join(accessories_list)
+                if battery_override:
+                    clean["Sănătate baterie"] = f"{battery_override}%"
 
+    # Backup: dacă nu găsește coloana specifică, le pune la început
     if battery_override and "Sănătate baterie" not in clean:
-        temp = {"Sănătate baterie": f"{battery_override}%"}
+        temp = {}
         if accessories_list: temp["Accesorii"] = ", ".join(accessories_list)
+        temp["Sănătate baterie"] = f"{battery_override}%"
         temp.update(clean)
         return temp
+        
     return clean
 
-# --- FUNCȚIE GENERARE PDF (REPARATĂ) ---
+# --- FUNCȚIE GENERARE PDF ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
@@ -76,13 +83,11 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # Titlu
             pdf.set_y(current_y + 3)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8)
             pdf.multi_cell(label_width, 3.5, txt=clean_for_pdf(brand_model), align='C')
             
-            # Specificații
             pdf.set_y(current_y + 11)
             lines_shown = 0
             for key, val in specs.items():
@@ -95,7 +100,6 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                     pdf.ln(3.4) 
                     lines_shown += 1
             
-            # Preț
             pdf.set_text_color(255, 0, 0)
             pdf.set_y(current_y + label_height - 12.5)
             pdf.set_x(current_x)
@@ -106,7 +110,6 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.set_font("Arial", "B", 8) 
             pdf.cell(6, 7, txt="lei", ln=True, align='L')
             
-            # Bon
             pdf.set_text_color(0, 0, 0)
             if full_codes[i]:
                 pdf.set_font("Arial", "", 5.5)
@@ -114,11 +117,10 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                 pdf.set_x(current_x)
                 pdf.cell(label_width, 3, txt=clean_for_pdf(full_codes[i]), align='C')
     
-    # PDF output în mod 'S' (string/bytes)
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete 40x60 Pro", layout="wide")
+st.set_page_config(page_title="Etichete 40x60", layout="wide")
 st.title("📱 Generator Etichete 40x60mm")
 
 if df.empty:
@@ -134,10 +136,9 @@ else:
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
                 
-                st.write("**Bon consignație:**")
                 c1, c2 = st.columns([2, 1])
-                b_digits = c1.text_input("Cod B", value="32451", key=f"b_dig_{i}", label_visibility="collapsed")
-                ag_val = c2.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}", label_visibility="collapsed")
+                b_digits = c1.text_input(f"Bon consignație {i+1}", value="32451", key=f"b_dig_{i}")
+                ag_val = c2.selectbox(f"AG {i+1}", list(range(1, 56)), index=28, key=f"ag_val_{i}")
                 full_code = f"B{b_digits}@{ag_val}"
                 
                 battery_percent = st.number_input(f"Sănătate baterie (%) {i+1}", 1, 100, 100, key=f"bat_{i}")
@@ -165,8 +166,5 @@ else:
 
     st.divider()
     if any(phones_to_export):
-        try:
-            pdf_out = create_pdf(phones_to_export, prices_to_export, codes_to_export, battery_to_export, acc_to_export, df.columns)
-            st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete.pdf", mime="application/pdf")
-        except Exception as e:
-            st.error(f"Eroare PDF: {e}")
+        pdf_out = create_pdf(phones_to_export, prices_to_export, codes_to_export, battery_to_export, acc_to_export, df.columns)
+        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete.pdf", mime="application/pdf")
