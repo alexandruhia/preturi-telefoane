@@ -82,15 +82,18 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             current_x = margin_left + (i * (label_width + gutter))
             current_y = 25
             
+            # Chenar
             pdf.set_draw_color(255, 0, 0)
             pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
             
+            # Titlu
             pdf.set_y(current_y + 2.5)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 9.5)
             pdf.multi_cell(label_width, 3.8, txt=clean_for_pdf(brand_model), align='C')
             
+            # Specificații
             start_specs_y = current_y + 11.5
             pdf.set_y(start_specs_y)
             display_items = list(specs.items())[:10]
@@ -104,21 +107,46 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                 pdf.write(line_step, v_str if len(v_str) < 28 else v_str[:25] + "...")    
                 pdf.ln(line_step)
             
+            # Bloc Preț și Cod
             end_specs_y = start_specs_y + (len(display_items) * line_step)
             pdf.set_draw_color(255, 0, 0)
             pdf.line(current_x + 5, end_specs_y + 1, current_x + label_width - 5, end_specs_y + 1)
             
+            # --- PREȚ (CIFRE MARI + lei MICI) ---
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(end_specs_y + 1.5)
-            pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 16) 
-            pdf.cell(label_width, 7, txt=f"{prices[i]} lei", align='C', ln=True)
+            price_str = str(prices[i])
             
+            # Calculăm lățimea totală pentru a centra grupul
+            pdf.set_font("Arial", "B", 22)
+            w_digits = pdf.get_string_width(price_str)
+            pdf.set_font("Arial", "B", 9)
+            w_lei = pdf.get_string_width(" lei")
+            total_w = w_digits + w_lei
+            
+            # Poziționare start pentru centrare
+            start_price_x = current_x + (label_width - total_w) / 2
+            pdf.set_y(end_specs_y + 2)
+            pdf.set_x(start_price_x)
+            
+            # Scrie cifrele
+            pdf.set_font("Arial", "B", 22)
+            pdf.write(10, price_str)
+            
+            # Scrie "lei"
+            pdf.set_y(end_specs_y + 4.5) # Coborâm puțin baza pentru "lei" să fie aliniat frumos
+            pdf.set_x(start_price_x + w_digits)
+            pdf.set_font("Arial", "B", 9)
+            pdf.write(10, " lei")
+            
+            # --- COD (ALINIAT DREAPTA) ---
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Arial", "", 5.5)
+            pdf.set_font("Arial", "B", 6.5)
+            pdf.set_y(end_specs_y + 10.5)
             pdf.set_x(current_x)
-            pdf.cell(label_width, 2.5, txt=clean_for_pdf(full_codes[i]), align='C')
+            # Cell cu align='R' și un mic padding la dreapta (38mm în loc de 40mm)
+            pdf.cell(label_width - 2, 3, txt=clean_for_pdf(full_codes[i]), align='R')
 
+            # Footer Logo
             footer_h = 9.5
             pdf.set_fill_color(255, 0, 0)
             pdf.rect(current_x + 0.1, current_y + label_height - footer_h - 0.1, label_width - 0.2, footer_h, 'F')
@@ -140,16 +168,12 @@ else:
 
     for i, col in enumerate(cols):
         with col:
-            # 1. BRAND
             brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
-            
-            # 2. MODEL (Imediat sub Brand)
             if brand_sel != "-":
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + sorted(df[df["Brand"] == brand_sel]["Model"].dropna().tolist()), key=f"m_{i}")
             else:
                 model_sel = st.selectbox(f"Model {i+1}", ["-"], key=f"m_{i}")
 
-            # 3. MEMORIE
             st.write("**Specificații Memorie:**")
             cm1, cm2 = st.columns(2)
             stoc_list = ["-", "2 GB", "4 GB", "8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
@@ -158,37 +182,35 @@ else:
             r_val = cm2.selectbox(f"RAM {i+1}", ram_list, key=f"ram_{i}")
             
             if brand_sel != "-" and model_sel != "-":
-                # 4. PREȚ ȘI COD
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
                 
                 cb1, cb2 = st.columns([2, 1])
                 b_digits = cb1.text_input("Cod B", value="32451", key=f"b_dig_{i}")
                 ag_val = cb2.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}")
                 
-                # 5. BATERIE ȘI ACCESORII
                 battery_percent = st.number_input(f"Baterie (%) {i+1}", 1, 100, 100, key=f"bat_{i}")
                 
                 st.write("**Accesorii:**")
                 acc_options = ["husă", "fără încărcător", "cutie", "cablu încărcare", "încărcător"]
                 selected_acc = [opt for idx, opt in enumerate(acc_options) if st.checkbox(opt, key=f"acc_{i}_{idx}")]
 
-                # Date pentru PDF
                 raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
                 p_exp[i], pr_exp[i], c_exp[i], b_exp[i], a_exp[i] = raw_specs, u_price, f"B{b_digits}@{ag_val}", battery_percent, selected_acc
                 s_exp[i], r_exp[i] = s_val, r_val
                 
-                # Previzualizare vizuală
+                # Previzualizare HTML (aproximativă pentru a semăna cu PDF-ul)
                 ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent, selected_acc, s_val, r_val)
                 specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
                 
                 st.markdown(f"""
                 <div style="border: 2px solid #FF0000; border-radius: 5px; background: white; width: 220px; margin: auto; font-family: Arial; overflow: hidden;">
-                    <div style="padding: 10px;">
+                    <div style="padding: 10px; position: relative;">
                         <h5 style="text-align:center; color: black; margin-bottom: 5px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
                         <div style="font-size: 10.8px; color: #333; line-height: 1.35;">{specs_html}</div>
                         <div style="text-align: center; border-top: 1.5px solid #ff0000; margin-top: 8px; padding-top: 5px;">
-                            <span style="font-size: 22px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
-                            <div style="font-size:8.5px; color: gray;">B{b_digits}@{ag_val}</div>
+                            <span style="font-size: 28px; color: #FF0000; font-weight: bold;">{u_price}</span>
+                            <span style="font-size: 12px; color: #FF0000; font-weight: bold;"> lei</span>
+                            <div style="font-size:9px; color: black; text-align: right; font-weight: bold;">B{b_digits}@{ag_val}</div>
                         </div>
                     </div>
                     <div style="background-color: #FF0000; height: 38px; display: flex; align-items: center; justify-content: center; padding: 5px;">
