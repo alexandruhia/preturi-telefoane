@@ -26,36 +26,31 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None):
         if col in ["Brand", "Model"]:
             continue
             
-        # Verificare flexibilă pentru coloana de baterie (cu sau fără diacritice)
         is_battery_col = col.lower() in ["sanatate baterie", "sănătate baterie", "baterie", "battery"]
         
         if is_battery_col:
             battery_col_found = True
             if battery_override:
-                clean["Sănătate baterie"] = f"{battery_override}%"
+                clean["Baterie"] = f"{battery_override}%"
             continue
 
         val = row_dict.get(col)
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
             
-    # Dacă coloana nu a fost găsită în tabel, dar avem override, o adăugăm manual la final
     if not battery_col_found and battery_override:
-        clean["Sănătate baterie"] = f"{battery_override}%"
+        clean["Baterie"] = f"{battery_override}%"
         
     return clean
 
-# --- FUNCȚIE GENERARE PDF ---
+# --- FUNCȚIE GENERARE PDF (ÎNGUSTATĂ) ---
 def create_pdf(selected_phones_list, prices, ag_values, battery_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # Setări font pentru a suporta caractere speciale (înlocuim cu simboluri standard dacă nu avem font extern)
-    pdf.set_font("Arial", size=8)
-    
-    margin_left = 20
-    gutter = 6           
-    label_width = 45     
+    margin_left = 15
+    gutter = 5           
+    label_width = 40     # Îngustată de la 45mm
     label_height = 72    
     
     for i, phone in enumerate(selected_phones_list):
@@ -67,51 +62,57 @@ def create_pdf(selected_phones_list, prices, ag_values, battery_values, original
             current_x = margin_left + (i * (label_width + gutter))
             current_y = 25
             
+            # Chenar
             pdf.set_draw_color(255, 0, 0)
-            pdf.set_line_width(0.5)
+            pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
             
+            # Titlu (Bold)
             pdf.set_y(current_y + 4)
             pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 8.5)
+            pdf.set_font("Arial", "B", 8)
             pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
             
-            pdf.set_font("Arial", "", 6.5)
+            # Specificații (Mix Bold/Italic)
             pdf.set_y(current_y + 14)
-            
             lines_shown = 0
             for key, val in specs.items():
                 if lines_shown < 10:
-                    pdf.set_x(current_x + 3)
-                    # Folosim latin-1 friendly text
-                    text_line = f"{key}: {val}".replace('ă', 'a').replace('î', 'i').replace('ș', 's').replace('ț', 't').replace('â', 'a')
-                    pdf.multi_cell(label_width - 6, 3, txt=text_line, align='L')
+                    # Curățare caractere românești pentru PDF standard
+                    clean_key = key.replace('ă', 'a').replace('ș', 's').replace('ț', 't').replace('â', 'a').replace('î', 'i')
+                    clean_val = str(val).replace('ă', 'a').replace('ș', 's').replace('ț', 't').replace('â', 'a').replace('î', 'i')
+                    
+                    pdf.set_x(current_x + 2)
+                    pdf.set_font("Arial", "B", 6.5)
+                    pdf.write(3, f"{clean_key}: ") # Numele coloanei Bold
+                    pdf.set_font("Arial", "I", 6.5)
+                    pdf.write(3, f"{clean_val}")    # Detaliul Italic
+                    pdf.ln(3.5)
                     lines_shown += 1
             
+            # Preț
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 16)
+            pdf.set_y(current_y + label_height - 15)
             pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 9) 
+            pdf.set_font("Arial", "B", 8) 
             pdf.cell(10, 8, txt="Pret:", ln=False, align='R')
-            pdf.set_font("Arial", "B", 17) 
-            pdf.cell(24, 8, txt=price_val, ln=False, align='C')
-            pdf.set_font("Arial", "B", 9) 
-            pdf.cell(8, 8, txt="lei", ln=True, align='L')
+            pdf.set_font("Arial", "B", 16) 
+            pdf.cell(20, 8, txt=price_val, ln=False, align='C')
+            pdf.set_font("Arial", "B", 8) 
+            pdf.cell(6, 8, txt="lei", ln=True, align='L')
             
             pdf.set_text_color(0, 0, 0)
-            
             if ag_values[i]:
-                pdf.set_font("Arial", "", 6)
-                pdf.set_y(current_y + label_height - 6)
+                pdf.set_font("Arial", "", 5.5)
+                pdf.set_y(current_y + label_height - 5)
                 pdf.set_x(current_x)
-                ag_text = f"B32451@{ag_values[i]}"
-                pdf.cell(label_width, 4, txt=ag_text, ln=True, align='C')
+                pdf.cell(label_width, 4, txt=f"B32451@{ag_values[i]}", ln=True, align='C')
             
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete 45x72mm", layout="wide")
-st.title("📱 Generator Etichete Slim")
+st.set_page_config(page_title="Etichete Slim 40x72", layout="wide")
+st.title("📱 Generator Etichete Ultra-Slim")
 
 if df.empty:
     st.error("Nu s-au putut încărca datele.")
@@ -125,40 +126,44 @@ else:
     for i, col in enumerate(cols):
         with col:
             brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
-
             if brand_sel != "-":
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 u_price = st.number_input(f"Pret lei {i+1}", min_value=0, key=f"p_{i}")
-                ag_number = st.selectbox(f"Număr cod {i+1}", list(range(1, 56)), key=f"ag_{i}")
-                
-                # Default la 100% pentru a fi vizibil imediat
-                battery_percent = st.number_input(f"Sănătate baterie (%) {i+1}", min_value=1, max_value=100, value=100, key=f"bat_{i}")
+                ag_number = st.selectbox(f"Cod AG {i+1}", list(range(1, 56)), key=f"ag_{i}")
+                battery_percent = st.number_input(f"Baterie % {i+1}", 1, 100, 100, key=f"bat_{i}")
 
                 if model_sel != "-":
                     raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
-                    
                     phones_to_export[i] = raw_specs
                     prices_to_export[i] = u_price
                     ag_to_export[i] = ag_number
                     battery_to_export[i] = battery_percent
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent)
-
-                    specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:10]])
+                    
+                    # HTML Preview cu Bold și Italic
+                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
                     
                     st.markdown(f"""
-                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 8px; background: white; min-height: 380px;">
-                        <h6 style="text-align:center; color: black; margin-bottom: 10px;">{brand_sel} {model_sel}</h6>
-                        <div style="font-size: 11px; color: #333;">{specs_html}</div>
-                        <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 15px; padding-top: 10px;">
-                            <span style="font-size: 24px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
-                            <div style="font-size:10px; margin-top:5px;">B32451@{ag_number}</div>
+                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; margin: auto;">
+                        <h6 style="text-align:center; color: black; margin-bottom: 8px; font-weight: bold; font-size: 14px;">
+                            {brand_sel} {model_sel}
+                        </h6>
+                        <div style="font-size: 10.5px; color: #333; line-height: 1.2;">
+                            {specs_html}
+                        </div>
+                        <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 10px; padding-top: 8px;">
+                            <span style="font-size: 20px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
+                            <div style="font-size:9px; color: gray;">B32451@{ag_number}</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
     st.divider()
     if any(phones_to_export):
-        if st.button("🔴 GENEREAZĂ PDF"):
-            pdf_data = create_pdf(phones_to_export, prices_to_export, ag_to_export, battery_to_export, df.columns)
-            st.download_button(label="📥 Descarcă Etichetele", data=pdf_data, file_name="etichete_slim.pdf", mime="application/pdf")
+        st.download_button(
+            label="🔴 DESCARCĂ PDF (40x72mm)",
+            data=create_pdf(phones_to_export, prices_to_export, ag_to_export, battery_to_export, df.columns),
+            file_name="etichete_slim.pdf",
+            mime="application/pdf"
+        )
