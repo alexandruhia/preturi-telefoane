@@ -19,7 +19,6 @@ def load_data():
 df = load_data()
 
 def get_specs_in_order(row_dict, original_columns):
-    """Extrage specificațiile respectând ordinea coloanelor din tabel."""
     clean = {}
     for col in original_columns:
         if col not in ["Brand", "Model"]:
@@ -47,18 +46,18 @@ def create_pdf(selected_phones_list, prices, ag_values, original_columns):
             current_x = margin_left + (i * (label_width + gutter))
             current_y = 25
             
-            # 1. Chenar Roșu
+            # Chenar
             pdf.set_draw_color(255, 0, 0)
             pdf.set_line_width(0.5)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Titlu
+            # Titlu
             pdf.set_y(current_y + 4)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8.5)
             pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
             
-            # 3. Specificații
+            # Specificații
             pdf.set_font("Arial", "", 6.5)
             pdf.set_y(current_y + 14)
             
@@ -69,7 +68,7 @@ def create_pdf(selected_phones_list, prices, ag_values, original_columns):
                     pdf.multi_cell(label_width - 6, 3, txt=f"{key}: {val}", align='L')
                     lines_shown += 1
             
-            # 4. Zona Preț
+            # Preț
             pdf.set_text_color(255, 0, 0)
             pdf.set_y(current_y + label_height - 16)
             pdf.set_x(current_x)
@@ -83,12 +82,12 @@ def create_pdf(selected_phones_list, prices, ag_values, original_columns):
             
             pdf.set_text_color(0, 0, 0)
             
-            # 5. Cod Ag sub preț
+            # Cod sub preț
             if ag_values[i]:
                 pdf.set_font("Arial", "", 6)
                 pdf.set_y(current_y + label_height - 6)
                 pdf.set_x(current_x)
-                ag_text = f"Btext@Ag1-{ag_values[i]}"
+                ag_text = f"B32451@{ag_values[i]}"
                 pdf.cell(label_width, 4, txt=ag_text, ln=True, align='C')
             
     return pdf.output(dest='S').encode('latin-1', 'replace')
@@ -128,7 +127,7 @@ else:
                 )
 
                 ag_number = st.selectbox(
-                    f"Ag {i+1}",
+                    f"Număr (1-55) {i+1}",
                     list(range(1, 56)),
                     key=f"ag_{i}"
                 )
@@ -161,7 +160,7 @@ else:
                                 {u_price} lei
                             </span>
                             <div style="font-size:10px; margin-top:5px;">
-                                Btext@Ag1-{ag_number}
+                                B32451@{ag_number}
                             </div>
                         </div>
                     </div>
