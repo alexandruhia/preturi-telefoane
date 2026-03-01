@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 import requests
-from io import BytesIO
+import os
 
 # --- CONFIGURARE ȘI ÎNCĂRCARE DATE ---
 SHEET_ID = '1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA'
 URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv'
-# Adresa RAW pentru a putea citi imaginea în PDF
+# URL-ul RAW pentru logo
 LOGO_URL = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
 
 @st.cache_data(ttl=600)
@@ -61,19 +61,21 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         clean["Accesorii"] = ", ".join(accessories_list)
     return clean
 
-# --- FUNCȚIE GENERARE PDF CU FOOTER ROȘU + LOGO ---
+# --- FUNCȚIE GENERARE PDF ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, stocare_values, ram_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     margin_left, gutter, label_width, label_height = 15, 5, 40, 60
     
-    logo_img_content = None
+    # SALVARE TEMPORARĂ LOGO PE DISK
+    local_logo_path = "temp_logo.png"
     try:
-        response = requests.get(LOGO_URL)
-        if response.status_code == 200:
-            logo_img_content = response.content
+        resp = requests.get(LOGO_URL)
+        if resp.status_code == 200:
+            with open(local_logo_path, "wb") as f:
+                f.write(resp.content)
     except:
-        pass
+        local_logo_path = None
 
     for i, phone in enumerate(selected_phones_list):
         if phone:
@@ -82,7 +84,7 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             current_x = margin_left + (i * (label_width + gutter))
             current_y = 25
             
-            # 1. Desenare Chenar și Titlu
+            # 1. Chenar și Titlu
             pdf.set_draw_color(255, 0, 0)
             pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
@@ -106,7 +108,7 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                 pdf.write(line_step, v_str if len(v_str) < 28 else v_str[:25] + "...")    
                 pdf.ln(line_step)
             
-            # 3. Bloc Preț și Cod (Compact)
+            # 3. Bloc Preț și Cod
             end_specs_y = start_specs_y + (len(display_items) * line_step)
             pdf.set_draw_color(255, 0, 0)
             pdf.line(current_x + 5, end_specs_y + 1, current_x + label_width - 5, end_specs_y + 1)
@@ -122,20 +124,19 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.set_x(current_x)
             pdf.cell(label_width, 2.5, txt=clean_for_pdf(full_codes[i]), align='C')
 
-            # 4. FRAME ROȘU (FOOTER) CU LOGO
+            # 4. FRAME ROȘU CU LOGO
             footer_h = 9.5
             pdf.set_fill_color(255, 0, 0)
             pdf.rect(current_x + 0.1, current_y + label_height - footer_h - 0.1, label_width - 0.2, footer_h, 'F')
             
-            if logo_img_content:
-                # Folosim BytesIO și specificăm type='PNG' pentru a evita eroarea de sistem
-                logo_stream = BytesIO(logo_img_content)
-                pdf.image(logo_stream, x=current_x + 4, y=current_y + label_height - footer_h + 1.2, w=32, type='PNG')
+            if local_logo_path and os.path.exists(local_logo_path):
+                # Trimitem calea fișierului către PDF (metoda cea mai sigură)
+                pdf.image(local_logo_path, x=current_x + 4, y=current_y + label_height - footer_h + 1.2, w=32)
             
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete ExpressCredit", layout="wide")
+st.set_page_config(page_title="Etichete Pro", layout="wide")
 st.title("📱 Generator Etichete Smartphone")
 
 if df.empty:
@@ -163,7 +164,7 @@ else:
                 b_digits = cb1.text_input("Cod B", value="32451", key=f"b_dig_{i}")
                 ag_val = cb2.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}")
                 
-                battery_percent = st.number_input(f"Sănătate baterie (%) {i+1}", 1, 100, 100, key=f"bat_{i}")
+                battery_percent = st.number_input(f"Baterie (%) {i+1}", 1, 100, 100, key=f"bat_{i}")
                 
                 st.write("**Accesorii:**")
                 acc_options = ["husă", "fără încărcător", "cutie", "cablu încărcare", "încărcător"]
