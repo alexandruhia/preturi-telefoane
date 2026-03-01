@@ -44,14 +44,14 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None):
     return clean
 
 # --- FUNCȚIE GENERARE PDF (40x60mm) ---
-def create_pdf(selected_phones_list, prices, ag_values, battery_values, original_columns):
+def create_pdf(selected_phones_list, prices, full_codes, battery_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
     margin_left = 15
     gutter = 5           
     label_width = 40     
-    label_height = 60    # Redus de la 72mm la 60mm
+    label_height = 60    
     
     for i, phone in enumerate(selected_phones_list):
         if phone:
@@ -77,7 +77,7 @@ def create_pdf(selected_phones_list, prices, ag_values, battery_values, original
             pdf.set_y(current_y + 11)
             lines_shown = 0
             for key, val in specs.items():
-                if lines_shown < 9: # Redus numărul de linii pentru înălțime mai mică
+                if lines_shown < 9:
                     clean_key = key.replace('ă', 'a').replace('ș', 's').replace('ț', 't').replace('â', 'a').replace('î', 'i')
                     clean_val = str(val).replace('ă', 'a').replace('ș', 's').replace('ț', 't').replace('â', 'a').replace('î', 'i')
                     
@@ -89,7 +89,7 @@ def create_pdf(selected_phones_list, prices, ag_values, battery_values, original
                     pdf.ln(3.2)
                     lines_shown += 1
             
-            # Preț (Repoziționat pentru 60mm)
+            # Preț
             pdf.set_text_color(255, 0, 0)
             pdf.set_y(current_y + label_height - 13)
             pdf.set_x(current_x)
@@ -100,25 +100,25 @@ def create_pdf(selected_phones_list, prices, ag_values, battery_values, original
             pdf.set_font("Arial", "B", 8) 
             pdf.cell(6, 7, txt="lei", ln=True, align='L')
             
-            # Cod AG
+            # Bon Consignatie (Ex: B32451@29)
             pdf.set_text_color(0, 0, 0)
-            if ag_values[i]:
-                pdf.set_font("Arial", "", 5)
+            if full_codes[i]:
+                pdf.set_font("Arial", "", 5.5)
                 pdf.set_y(current_y + label_height - 4.5)
                 pdf.set_x(current_x)
-                pdf.cell(label_width, 3, txt=f"B32451@{ag_values[i]}", ln=True, align='C')
+                pdf.cell(label_width, 3, txt=full_codes[i], ln=True, align='C')
             
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- INTERFAȚĂ STREAMLIT ---
 st.set_page_config(page_title="Etichete Compacte 40x60", layout="wide")
-st.title("📱 Generator Etichete Compacte (40x60mm)")
+st.title("📱 Generator Etichete 40x60mm")
 
 if df.empty:
     st.error("Nu s-au putut încărca datele.")
 else:
     cols = st.columns(3)
-    phones_to_export, prices_to_export, ag_to_export, battery_to_export = [None]*3, [0]*3, [None]*3, [None]*3
+    phones_to_export, prices_to_export, codes_to_export, battery_to_export = [None]*3, [0]*3, [None]*3, [None]*3
 
     for i, col in enumerate(cols):
         with col:
@@ -126,31 +126,40 @@ else:
             if brand_sel != "-":
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
-                ag_number = st.selectbox(f"Cod AG {i+1}", list(range(1, 56)), key=f"ag_{i}")
+                
+                # --- NOILE CASUTE PENTRU BON CONSIGNATIE ---
+                st.write(f"**Bon consignație {i+1}**")
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    b_digits = st.text_input("Cifre după B", value="32451", key=f"b_dig_{i}")
+                with c2:
+                    ag_val = st.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}")
+                
+                full_consignation_code = f"B{b_digits}@{ag_val}"
+                
                 battery_percent = st.number_input(f"Sănătate baterie % {i+1}", 1, 100, 100, key=f"bat_{i}")
 
                 if model_sel != "-":
                     raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
                     phones_to_export[i] = raw_specs
                     prices_to_export[i] = u_price
-                    ag_to_export[i] = ag_number
+                    codes_to_export[i] = full_consignation_code
                     battery_to_export[i] = battery_percent
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent)
                     specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:9]])
                     
-                    # Previzualizare vizuală proporțională
                     st.markdown(f"""
-                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 330px; margin: auto; font-family: Arial;">
+                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 320px; margin: auto; font-family: Arial;">
                         <h6 style="text-align:center; color: black; margin-bottom: 8px; font-weight: bold; font-size: 13px; text-transform: uppercase;">
                             {brand_sel} {model_sel}
                         </h6>
-                        <div style="font-size: 10px; color: #333; line-height: 1.2; height: 180px; overflow: hidden;">
+                        <div style="font-size: 10px; color: #333; line-height: 1.2; height: 165px; overflow: hidden;">
                             {specs_html}
                         </div>
                         <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 10px; padding-top: 5px;">
                             <span style="font-size: 19px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
-                            <div style="font-size:8.5px; color: gray; margin-top: 2px;">B32451@{ag_number}</div>
+                            <div style="font-size:8.5px; color: gray; margin-top: 2px;">{full_consignation_code}</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -158,8 +167,8 @@ else:
     st.divider()
     if any(phones_to_export):
         st.download_button(
-            label="🔴 DESCARCĂ PDF COMPACT (40x60mm)",
-            data=create_pdf(phones_to_export, prices_to_export, ag_to_export, battery_to_export, df.columns),
-            file_name="etichete_40x60mm.pdf",
+            label="🔴 DESCARCĂ PDF (40x60mm)",
+            data=create_pdf(phones_to_export, prices_to_export, codes_to_export, battery_to_export, df.columns),
+            file_name="etichete_consignatie.pdf",
             mime="application/pdf"
         )
