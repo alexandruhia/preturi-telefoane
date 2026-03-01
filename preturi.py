@@ -4,221 +4,168 @@ from fpdf import FPDF
 import requests
 import os
 
-# --- CONFIGURARE ȘI ÎNCĂRCARE DATE ---
+# --- CONFIGURARE PAGINĂ (Trebuie să fie prima) ---
+st.set_page_config(page_title="Etichete Pro", layout="wide")
+
 SHEET_ID = '1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA'
 URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv'
 LOGO_URL = "https://raw.githubusercontent.com/alexandruhia/preturi-telefoane/main/logo.png"
 
-@st.cache_data(ttl=600)
+# --- CACHE DATE ȘI LOGO (Viteză maximă) ---
+@st.cache_data(ttl=3600)
 def load_data():
     try:
         df = pd.read_csv(URL)
         df.columns = [str(c).strip() for c in df.columns]
         return df
-    except Exception as e:
-        st.error(f"Eroare la citirea tabelului: {e}")
+    except:
         return pd.DataFrame()
 
-df = load_data()
+@st.cache_resource
+def get_logo():
+    try:
+        resp = requests.get(LOGO_URL, timeout=5)
+        if resp.status_code == 200:
+            return resp.content
+    except:
+        return None
+    return None
 
+df = load_data()
+LOGO_DATA = get_logo()
+
+# --- UTILITARE ---
 def clean_for_pdf(text):
     if not text: return ""
-    replacements = {'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ț': 't', 'Ă': 'A', 'Â': 'A', 'Î': 'I', 'Ș': 'S', 'Ț': 'T'}
-    t = str(text)
-    for k, v in replacements.items():
-        t = t.replace(k, v)
+    # Mapare rapidă pentru diacritice
+    rep = {'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ț': 't', 'Ă': 'A', 'Â': 'A', 'Î': 'I', 'Ș': 'S', 'Ț': 'T'}
+    t = "".join(rep.get(c, c) for c in str(text))
     return t.encode('latin-1', 'replace').decode('latin-1')
 
-def get_specs_in_order(row_dict, original_columns, battery_override=None, accessories_list=None, stocare_val=None, ram_val=None):
+def get_specs_in_order(row_dict, original_columns, bat, acc, stoc, ram):
     clean = {}
-    proc_found = False
-    skip_cols = ["brand", "model", "stocare", "ram", "sanatate baterie", "sănătate baterie", "baterie", "battery", "storage"]
-
+    skip = {"brand", "model", "stocare", "ram", "sanatate baterie", "sănătate baterie", "baterie", "battery", "storage"}
+    
+    # Adăugăm întâi Stocare și RAM dacă există
+    if stoc and stoc != "-": clean["Stocare"] = stoc
+    if ram and ram != "-": clean["RAM"] = ram
+    
     for col in original_columns:
-        col_lower = col.lower()
-        if col_lower in skip_cols: continue
+        c_low = col.lower()
+        if c_low in skip: continue
         val = row_dict.get(col)
-        if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
+        if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "NaN"]:
             clean[col] = str(val).strip()
-            if "procesor" in col_lower:
-                if stocare_val and stocare_val != "-": clean["Stocare"] = stocare_val
-                if ram_val and ram_val != "-": clean["RAM"] = ram_val
-                proc_found = True
-            if "capacitate baterie" in col_lower and battery_override:
-                clean["Sănătate baterie"] = f"{battery_override}%"
-
-    if not proc_found:
-        final_clean = {}
-        if stocare_val and stocare_val != "-": final_clean["Stocare"] = stocare_val
-        if ram_val and ram_val != "-": final_clean["RAM"] = ram_val
-        final_clean.update(clean)
-        clean = final_clean
-
-    if battery_override and "Sănătate baterie" not in clean:
-        clean["Sănătate baterie"] = f"{battery_override}%"
-    if accessories_list:
-        clean["Accesorii"] = ", ".join(accessories_list)
+    
+    if bat: clean["Sanatate baterie"] = f"{bat}%"
+    if acc: clean["Accesorii"] = ", ".join(acc)
     return clean
 
-# --- FUNCȚIE GENERARE PDF (UNA LÂNGĂ ALTA) ---
-def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, stocare_values, ram_values, original_columns):
+# --- GENERARE PDF OPTIMIZATĂ ---
+def create_pdf(phones_data, original_cols):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
-    # Dimensiuni pentru 3 etichete pe lățimea A4 (210mm)
-    label_width = 60  
-    label_height = 80 
-    margin_left = (210 - (label_width * 3)) / 2  # Centrare grup
-    current_y = 20
+    l_width, l_height = 60, 80
+    margin_x = (210 - (l_width * 3)) / 2
+    curr_y = 20
 
-    local_logo_path = "temp_logo.png"
-    try:
-        resp = requests.get(LOGO_URL)
-        if resp.status_code == 200:
-            with open(local_logo_path, "wb") as f:
-                f.write(resp.content)
-    except:
-        local_logo_path = None
+    # Salvăm logo-ul temporar o singură dată pentru sesiune
+    if LOGO_DATA:
+        with open("logo_temp.png", "wb") as f:
+            f.write(LOGO_DATA)
 
-    for i, phone in enumerate(selected_phones_list):
-        if phone:
-            # Poziționare orizontală (i=0 -> stânga, i=1 -> mijloc, i=2 -> dreapta)
-            current_x = margin_left + (i * label_width)
-            
-            specs = get_specs_in_order(phone, original_columns, battery_values[i], acc_values[i], stocare_values[i], ram_values[i])
-            brand_model = f"{phone.get('Brand', '')} {phone.get('Model', '')}".upper()
-            
-            # Chenar
-            pdf.set_draw_color(255, 0, 0)
-            pdf.set_line_width(0.4)
-            pdf.rect(current_x, current_y, label_width, label_height)
-            
-            # Titlu
-            pdf.set_y(current_y + 3)
-            pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 9)
-            pdf.multi_cell(label_width, 4, txt=clean_for_pdf(brand_model), align='C')
-            
-            # Specificații
-            start_specs_y = pdf.get_y() + 2
-            pdf.set_y(start_specs_y)
-            display_items = list(specs.items())[:10]
-            line_step = 3.5
-            for key, val in display_items:
-                pdf.set_x(current_x + 2)
-                pdf.set_font("Arial", "B", 6.8)
-                pdf.write(line_step, f"{clean_for_pdf(key)}: ") 
-                pdf.set_font("Arial", "I", 6.8)
-                v_str = clean_for_pdf(val)
-                pdf.write(line_step, v_str if len(v_str) < 28 else v_str[:25] + "...")    
-                pdf.ln(line_step)
-            
-            # Bloc Preț
-            price_area_y = current_y + label_height - 22
-            pdf.set_draw_color(255, 0, 0)
-            pdf.line(current_x + 4, price_area_y, current_x + label_width - 4, price_area_y)
-            
-            pdf.set_text_color(255, 0, 0)
-            price_str = str(prices[i])
-            pdf.set_font("Arial", "B", 20)
-            w_digits = pdf.get_string_width(price_str)
-            pdf.set_font("Arial", "B", 8)
-            w_lei = pdf.get_string_width(" lei")
-            
-            start_price_x = current_x + (label_width - (w_digits + w_lei)) / 2
-            pdf.set_xy(start_price_x, price_area_y + 1.5)
-            pdf.set_font("Arial", "B", 20)
-            pdf.write(10, price_str)
-            pdf.set_font("Arial", "B", 8)
-            pdf.write(10, " lei")
-            
-            # Cod
-            pdf.set_text_color(0, 0, 0)
+    for i, data in enumerate(phones_data):
+        if not data: continue
+        curr_x = margin_x + (i * l_width)
+        
+        # Date etichetă
+        phone = data['raw']
+        specs = get_specs_in_order(phone, original_cols, data['bat'], data['acc'], data['stoc'], data['ram'])
+        
+        # Desenare
+        pdf.set_draw_color(255, 0, 0)
+        pdf.rect(curr_x, curr_y, l_width, l_height)
+        
+        # Titlu
+        pdf.set_font("Arial", "B", 9)
+        pdf.set_xy(curr_x, curr_y + 3)
+        title = f"{phone.get('Brand', '')} {phone.get('Model', '')}".upper()
+        pdf.multi_cell(l_width, 4, clean_for_pdf(title), align='C')
+        
+        # Specs
+        pdf.set_font("Arial", "", 6.5)
+        sy = pdf.get_y() + 2
+        for k, v in list(specs.items())[:10]:
+            pdf.set_xy(curr_x + 2, sy)
             pdf.set_font("Arial", "B", 6.5)
-            pdf.set_xy(current_x, price_area_y + 9)
-            pdf.cell(label_width - 2, 3, txt=clean_for_pdf(full_codes[i]), align='R')
+            pdf.write(3.5, f"{clean_for_pdf(k)}: ")
+            pdf.set_font("Arial", "", 6.5)
+            txt = clean_for_pdf(v)
+            pdf.write(3.5, txt[:28] + "..." if len(txt) > 30 else txt)
+            sy += 3.5
 
-            # Footer Logo
-            footer_h = 9
-            pdf.set_fill_color(255, 0, 0)
-            pdf.rect(current_x + 0.1, current_y + label_height - footer_h - 0.1, label_width - 0.2, footer_h, 'F')
-            if local_logo_path:
-                pdf.image(local_logo_path, x=current_x + (label_width - 35)/2, y=current_y + label_height - footer_h + 1.2, w=35)
-                
+        # Preț & Cod
+        pdf.set_draw_color(255, 0, 0)
+        pdf.line(curr_x + 4, curr_y + l_height - 22, curr_x + l_width - 4, curr_y + l_height - 22)
+        
+        pdf.set_text_color(255, 0, 0)
+        pdf.set_font("Arial", "B", 20)
+        p_str = str(data['price'])
+        pdf.set_xy(curr_x, curr_y + l_height - 18)
+        pdf.cell(l_width, 10, f"{p_str} lei", align='C')
+        
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", "B", 6)
+        pdf.set_xy(curr_x, curr_y + l_height - 12)
+        pdf.cell(l_width - 2, 3, data['code'], align='R')
+
+        # Footer
+        pdf.set_fill_color(255, 0, 0)
+        pdf.rect(curr_x + 0.1, curr_y + l_height - 8.1, l_width - 0.2, 8, 'F')
+        if LOGO_DATA:
+            pdf.image("logo_temp.png", x=curr_x + (l_width-30)/2, y=curr_y + l_height - 7, w=30)
+
     return pdf.output(dest='S').encode('latin-1')
 
-# --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete Pro", layout="wide")
-st.title("📱 Generator Etichete ExpressCredit")
+# --- UI ---
+st.title("📱 Etichete Express (Instant Load)")
 
-if df.empty:
-    st.error("Eroare la baza de date.")
-else:
+if not df.empty:
     cols = st.columns(3)
-    p_exp, pr_exp, c_exp, b_exp, a_exp, s_exp, r_exp = [None]*3, [0]*3, [None]*3, [None]*3, [None]*3, [None]*3, [None]*3
+    export_data = [None] * 3
 
-    for i, col in enumerate(cols):
-        with col:
-            brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
-            if brand_sel != "-":
-                model_sel = st.selectbox(f"Model {i+1}", ["-"] + sorted(df[df["Brand"] == brand_sel]["Model"].dropna().tolist()), key=f"m_{i}")
-            else:
-                model_sel = st.selectbox(f"Model {i+1}", ["-"], key=f"m_{i}")
-
-            st.write("**Specificații Memorie:**")
-            cm1, cm2 = st.columns(2)
-            stoc_list = ["-", "2 GB", "4 GB", "8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
-            ram_list = ["-", "1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB", "12 GB", "16 GB", "20 GB", "24 GB"]
-            s_val = cm1.selectbox(f"Stocare {i+1}", stoc_list, key=f"stoc_{i}")
-            r_val = cm2.selectbox(f"RAM {i+1}", ram_list, key=f"ram_{i}")
+    for i in range(3):
+        with cols[i]:
+            st.subheader(f"Telefon {i+1}")
+            brand = st.selectbox(f"Brand", ["-"] + sorted(df["Brand"].unique().tolist()), key=f"b{i}")
             
-            if brand_sel != "-" and model_sel != "-":
-                u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
-                cb1, cb2 = st.columns([2, 1])
-                b_digits = cb1.text_input("Cod B", value="32451", key=f"b_dig_{i}")
-                ag_val = cb2.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}")
-                battery_percent = st.number_input(f"Baterie (%) {i+1}", 1, 100, 100, key=f"bat_{i}")
+            model = "-"
+            if brand != "-":
+                model = st.selectbox(f"Model", ["-"] + sorted(df[df["Brand"] == brand]["Model"].tolist()), key=f"m{i}")
+            
+            s1, s2 = st.columns(2)
+            stoc = s1.selectbox("Stocare", ["-", "64 GB", "128 GB", "256 GB", "512 GB"], key=f"s{i}")
+            ram = s2.selectbox("RAM", ["-", "4 GB", "6 GB", "8 GB", "12 GB"], key=f"r{i}")
+            
+            if brand != "-" and model != "-":
+                price = st.number_input("Preț", min_value=0, key=f"p{i}")
+                b_cod = st.text_input("Cod B", "32451", key=f"bc{i}")
+                ag = st.selectbox("AG", list(range(1, 56)), 27, key=f"ag{i}")
+                bat = st.number_input("Baterie %", 1, 100, 100, key=f"bt{i}")
                 
-                st.write("**Accesorii:**")
-                acc_options = ["husă", "fără încărcător", "cutie", "cablu încărcare", "încărcător"]
-                selected_acc = [opt for idx, opt in enumerate(acc_options) if st.checkbox(opt, key=f"acc_{i}_{idx}")]
-
-                raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
-                p_exp[i], pr_exp[i], c_exp[i], b_exp[i], a_exp[i] = raw_specs, u_price, f"B{b_digits}@{ag_val}", battery_percent, selected_acc
-                s_exp[i], r_exp[i] = s_val, r_val
+                acc = [opt for opt in ["husă", "cutie", "încărcător"] if st.checkbox(opt, key=f"ac{i}{opt}")]
                 
-                # Previzualizare HTML
-                ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent, selected_acc, s_val, r_val)
-                specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
-                
-                st.markdown(f"""
-                <div style="border: 2px solid #FF0000; border-radius: 5px; background: white; width: 220px; margin: auto; font-family: Arial; overflow: hidden;">
-                    <div style="padding: 10px; position: relative;">
-                        <h5 style="text-align:center; color: black; margin-bottom: 5px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
-                        <div style="font-size: 10.8px; color: #333; line-height: 1.35;">{specs_html}</div>
-                        <div style="text-align: center; border-top: 1.5px solid #ff0000; margin-top: 8px; padding-top: 5px;">
-                            <span style="font-size: 28px; color: #FF0000; font-weight: bold;">{u_price}</span>
-                            <span style="font-size: 12px; color: #FF0000; font-weight: bold;"> lei</span>
-                            <div style="font-size:9px; color: black; text-align: right; font-weight: bold;">B{b_digits}@{ag_val}</div>
-                        </div>
-                    </div>
-                    <div style="background-color: #FF0000; height: 38px; display: flex; align-items: center; justify-content: center; padding: 5px;">
-                         <img src="{LOGO_URL}" style="width: 160px;">
-                    </div>
-                </div>""", unsafe_allow_html=True)
+                raw = df[(df["Brand"] == brand) & (df["Model"] == model)].iloc[0].to_dict()
+                export_data[i] = {'raw': raw, 'price': price, 'code': f"B{b_cod}@{ag}", 'bat': bat, 'acc': acc, 'stoc': stoc, 'ram': ram}
 
     st.divider()
     
-    # --- BUTON EXPORT PE MIJLOC ---
-    if any(p_exp):
-        pdf_out = create_pdf(p_exp, pr_exp, c_exp, b_exp, a_exp, s_exp, r_exp, df.columns)
-        
-        _, btn_col, _ = st.columns([1, 1, 1])
-        with btn_col:
-            st.download_button(
-                label="🔴 DESCARCĂ PDF FINAL (TOATE 3)", 
-                data=pdf_out, 
-                file_name="etichete_expresscredit.pdf", 
-                mime="application/pdf",
-                use_container_width=True
-            )
+    if any(export_data):
+        pdf_bytes = create_pdf(export_data, df.columns)
+        _, center_col, _ = st.columns([1, 1, 1])
+        with center_col:
+            st.download_button("🔴 DESCARCĂ PDF", pdf_bytes, "etichete.pdf", "application/pdf", use_container_width=True)
+
+else:
+    st.error("Baza de date nu a putut fi încărcată.")
