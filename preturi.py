@@ -29,7 +29,7 @@ def get_specs_in_order(row_dict, original_columns):
     return clean
 
 # --- FUNCȚIE GENERARE PDF (45x72mm) ---
-def create_pdf(selected_phones_list, prices, original_columns):
+def create_pdf(selected_phones_list, prices, ag_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     
@@ -52,13 +52,13 @@ def create_pdf(selected_phones_list, prices, original_columns):
             pdf.set_line_width(0.5)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 2. Titlu (Poziționat la începutul etichetei după eliminarea logoului)
+            # 2. Titlu
             pdf.set_y(current_y + 4)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 8.5)
             pdf.multi_cell(label_width, 3.5, txt=brand_model, align='C')
             
-            # 3. Specificații (Respectă ordinea din Google Sheets)
+            # 3. Specificații
             pdf.set_font("Arial", "", 6.5)
             pdf.set_y(current_y + 14)
             
@@ -71,7 +71,7 @@ def create_pdf(selected_phones_list, prices, original_columns):
             
             # 4. Zona Preț
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 14)
+            pdf.set_y(current_y + label_height - 16)
             pdf.set_x(current_x)
             
             pdf.set_font("Arial", "B", 9) 
@@ -82,6 +82,14 @@ def create_pdf(selected_phones_list, prices, original_columns):
             pdf.cell(8, 8, txt="lei", ln=True, align='L')
             
             pdf.set_text_color(0, 0, 0)
+            
+            # 5. Cod Ag sub preț
+            if ag_values[i]:
+                pdf.set_font("Arial", "", 6)
+                pdf.set_y(current_y + label_height - 6)
+                pdf.set_x(current_x)
+                ag_text = f"Btext@Ag1-{ag_values[i]}"
+                pdf.cell(label_width, 4, txt=ag_text, ln=True, align='C')
             
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
@@ -96,28 +104,65 @@ else:
     cols = st.columns(3)
     phones_to_export = [None, None, None]
     prices_to_export = [0, 0, 0]
+    ag_to_export = [None, None, None]
 
     for i, col in enumerate(cols):
         with col:
-            brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
+            brand_sel = st.selectbox(
+                f"Brand {i+1}",
+                ["-"] + sorted(df["Brand"].dropna().unique().tolist()),
+                key=f"b_{i}"
+            )
+
             if brand_sel != "-":
-                model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
-                u_price = st.number_input(f"Pret lei {i+1}", min_value=0, key=f"p_{i}")
-                
+                model_sel = st.selectbox(
+                    f"Model {i+1}",
+                    ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(),
+                    key=f"m_{i}"
+                )
+
+                u_price = st.number_input(
+                    f"Pret lei {i+1}",
+                    min_value=0,
+                    key=f"p_{i}"
+                )
+
+                ag_number = st.selectbox(
+                    f"Ag {i+1}",
+                    list(range(1, 56)),
+                    key=f"ag_{i}"
+                )
+
                 if model_sel != "-":
-                    raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
+                    raw_specs = df[
+                        (df["Brand"] == brand_sel) &
+                        (df["Model"] == model_sel)
+                    ].iloc[0].to_dict()
+
                     phones_to_export[i] = raw_specs
                     prices_to_export[i] = u_price
+                    ag_to_export[i] = ag_number
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns)
-                    specs_html = "".join([f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:10]])
+                    specs_html = "".join(
+                        [f"• {k}: {v}<br>" for k, v in list(ordered_specs.items())[:10]]
+                    )
                     
                     st.markdown(f"""
                     <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 8px; background: white; min-height: 320px;">
-                        <h6 style="text-align:center; color: black; margin-bottom: 10px;">{brand_sel} {model_sel}</h6>
-                        <div style="font-size: 11px; color: #333;">{specs_html}</div>
+                        <h6 style="text-align:center; color: black; margin-bottom: 10px;">
+                            {brand_sel} {model_sel}
+                        </h6>
+                        <div style="font-size: 11px; color: #333;">
+                            {specs_html}
+                        </div>
                         <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 15px; padding-top: 10px;">
-                            <span style="font-size: 24px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
+                            <span style="font-size: 24px; color: #FF0000; font-weight: bold;">
+                                {u_price} lei
+                            </span>
+                            <div style="font-size:10px; margin-top:5px;">
+                                Btext@Ag1-{ag_number}
+                            </div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -126,5 +171,16 @@ else:
 
     if any(phones_to_export):
         if st.button("🔴 DESCARCĂ PDF"):
-            pdf_data = create_pdf(phones_to_export, prices_to_export, df.columns)
-            st.download_button(label="📥 Salvează PDF", data=pdf_data, file_name="etichete_slim.pdf", mime="application/pdf")
+            pdf_data = create_pdf(
+                phones_to_export,
+                prices_to_export,
+                ag_to_export,
+                df.columns
+            )
+
+            st.download_button(
+                label="📥 Salvează PDF",
+                data=pdf_data,
+                file_name="etichete_slim.pdf",
+                mime="application/pdf"
+            )
