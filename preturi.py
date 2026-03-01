@@ -1,10 +1,14 @@
 import streamlit as st
 import pandas as pd
 from fpdf import FPDF
+import requests
+from io import BytesIO
 
 # --- CONFIGURARE ȘI ÎNCĂRCARE DATE ---
 SHEET_ID = '1QnRcdnDRx7UoOhrnnVI5as39g0HFEt0wf0kGY8u-IvA'
 URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv'
+# URL-ul brut al logo-ului de pe GitHub (înlocuiește cu link-ul tău real dacă diferă)
+LOGO_URL = "https://raw.githubusercontent.com/utilizator/repo/main/logo.png"
 
 @st.cache_data(ttl=600)
 def load_data():
@@ -53,17 +57,25 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
 
     if battery_override and "Sănătate baterie" not in clean:
         clean["Sănătate baterie"] = f"{battery_override}%"
-    
     if accessories_list:
         clean["Accesorii"] = ", ".join(accessories_list)
     return clean
 
-# --- FUNCȚIE GENERARE PDF (Totul sub specificații) ---
+# --- FUNCȚIE GENERARE PDF CU LOGO PE FUNDAL ROȘU ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, stocare_values, ram_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
     margin_left, gutter, label_width, label_height = 15, 5, 40, 60
     
+    # Încercăm să descărcăm logo-ul o singură dată pentru sesiune
+    logo_img = None
+    try:
+        response = requests.get(LOGO_URL)
+        if response.status_code == 200:
+            logo_img = BytesIO(response.content)
+    except:
+        pass
+
     for i, phone in enumerate(selected_phones_list):
         if phone:
             specs = get_specs_in_order(phone, original_columns, battery_values[i], acc_values[i], stocare_values[i], ram_values[i])
@@ -71,12 +83,11 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             current_x = margin_left + (i * (label_width + gutter))
             current_y = 25
             
-            # Chenar Exterior
+            # 1. Chenar și Titlu
             pdf.set_draw_color(255, 0, 0)
             pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # 1. Titlu
             pdf.set_y(current_y + 2.5)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 9.5)
@@ -96,31 +107,37 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
                 pdf.write(line_step, v_str if len(v_str) < 28 else v_str[:25] + "...")    
                 pdf.ln(line_step)
             
-            # 3. Calcul Poziție Bloc Preț + Cod (Imediat sub specificații)
+            # 3. Preț și Cod (Compactate)
             end_specs_y = start_specs_y + (len(display_items) * line_step)
-            
-            # Linia roșie sub specificații
-            pdf.set_draw_color(255, 0, 0)
             pdf.line(current_x + 5, end_specs_y + 1, current_x + label_width - 5, end_specs_y + 1)
             
-            # Prețul
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(end_specs_y + 2)
+            pdf.set_y(end_specs_y + 1.5)
             pdf.set_x(current_x)
-            pdf.set_font("Arial", "B", 17) 
-            pdf.cell(label_width, 8, txt=f"{prices[i]} lei", align='C', ln=True)
+            pdf.set_font("Arial", "B", 16) 
+            pdf.cell(label_width, 7, txt=f"{prices[i]} lei", align='C', ln=True)
             
-            # Codul (B-ul) imediat sub preț (fără ln/spatiu mare)
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Arial", "", 5.5)
+            pdf.set_font("Arial", "", 5)
             pdf.set_x(current_x)
-            pdf.cell(label_width, 2.5, txt=clean_for_pdf(full_codes[i]), align='C')
+            pdf.cell(label_width, 2.5, txt=clean_for_pdf(full_codes[i]), align='C', ln=True)
+
+            # 4. FRAME ROȘU CU LOGO (LA BAZĂ)
+            # Desenăm un dreptunghi roșu plin la baza etichetei
+            footer_height = 8
+            pdf.set_fill_color(255, 0, 0) # Roșu
+            pdf.rect(current_x + 0.2, current_y + label_height - footer_height - 0.2, label_width - 0.4, footer_height, 'F')
+            
+            if logo_img:
+                # Plasăm logo-ul peste dreptunghiul roșu
+                # Parametri: x, y, width (ajustat pentru a încăpea)
+                pdf.image(logo_img, x=current_x + 5, y=current_y + label_height - footer_height + 1, w=label_width - 10)
             
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAȚĂ STREAMLIT ---
-st.set_page_config(page_title="Etichete Compacte", layout="wide")
-st.title("📱 Generator Etichete (Fără Spații Goale)")
+st.set_page_config(page_title="Etichete Pro", layout="wide")
+st.title("📱 Generator Etichete cu Logo ExpressCredit")
 
 if df.empty:
     st.error("Eroare la baza de date.")
@@ -159,20 +176,24 @@ else:
                     s_exp[i], r_exp[i] = s_val, r_val
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent, selected_acc, s_val, r_val)
-                    specs_list = list(ordered_specs.items())[:10]
-                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in specs_list])
+                    specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
                     
                     st.markdown(f"""
-                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; min-height: 250px; margin: auto; font-family: Arial;">
-                        <h5 style="text-align:center; color: black; margin-bottom: 5px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
-                        <div style="font-size: 10.8px; color: #333; line-height: 1.35;">{specs_html}</div>
-                        <div style="text-align: center; border-top: 1.5px solid #ff0000; margin-top: 8px; padding-top: 5px;">
-                            <span style="font-size: 22px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
-                            <div style="font-size:8.5px; color: gray; margin-top: 0px;">B{b_digits}@{ag_val}</div>
+                    <div style="border: 2px solid #FF0000; border-radius: 5px; background: white; width: 220px; min-height: 280px; margin: auto; font-family: Arial; position: relative; padding-bottom: 40px;">
+                        <div style="padding: 10px;">
+                            <h5 style="text-align:center; color: black; margin-bottom: 5px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
+                            <div style="font-size: 10.8px; color: #333; line-height: 1.35;">{specs_html}</div>
+                            <div style="text-align: center; border-top: 1.5px solid #ff0000; margin-top: 8px; padding-top: 5px;">
+                                <span style="font-size: 22px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
+                                <div style="font-size:8.5px; color: gray;">B{b_digits}@{ag_val}</div>
+                            </div>
+                        </div>
+                        <div style="background-color: #FF0000; height: 35px; width: 100%; display: flex; align-items: center; justify-content: center;">
+                             <span style="color: white; font-weight: bold; font-size: 10px;">LOGO EXPRESS CREDIT</span>
                         </div>
                     </div>""", unsafe_allow_html=True)
 
     st.divider()
     if any(p_exp):
         pdf_out = create_pdf(p_exp, pr_exp, c_exp, b_exp, a_exp, s_exp, r_exp, df.columns)
-        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_compacte_final.pdf", mime="application/pdf")
+        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_logo.pdf", mime="application/pdf")
