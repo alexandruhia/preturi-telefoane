@@ -37,16 +37,13 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         val = row_dict.get(col)
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
-            # Poziționare după Procesor
             if "procesor" in col_lower:
                 if stocare_val and stocare_val != "-": clean["Stocare"] = stocare_val
                 if ram_val and ram_val != "-": clean["RAM"] = ram_val
                 proc_found = True
-            # Sănătate Baterie după Capacitate
             if "capacitate baterie" in col_lower and battery_override:
                 clean["Sănătate baterie"] = f"{battery_override}%"
 
-    # Dacă nu există Procesor în tabel, le punem la început
     if not proc_found:
         final_clean = {}
         if stocare_val and stocare_val != "-": final_clean["Stocare"] = stocare_val
@@ -57,12 +54,11 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
     if battery_override and "Sănătate baterie" not in clean:
         clean["Sănătate baterie"] = f"{battery_override}%"
     
-    # Accesorii întotdeauna ultima
     if accessories_list:
         clean["Accesorii"] = ", ".join(accessories_list)
     return clean
 
-# --- FUNCȚIE GENERARE PDF ---
+# --- FUNCȚIE GENERARE PDF (Spațiu gol eliminat) ---
 def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_values, stocare_values, ram_values, original_columns):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
@@ -79,32 +75,32 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.set_line_width(0.4)
             pdf.rect(current_x, current_y, label_width, label_height)
             
-            # Titlu Mărit
+            # Titlu
             pdf.set_y(current_y + 2.5)
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 9.5)
             pdf.multi_cell(label_width, 3.8, txt=clean_for_pdf(brand_model), align='C')
             
-            # Specificații (10 rânduri)
+            # Specificații - Am coborât limita inferioară pentru a elimina spațiul gol
             pdf.set_y(current_y + 11.5)
             display_items = list(specs.items())[:10]
             for key, val in display_items:
                 pdf.set_x(current_x + 2)
                 pdf.set_font("Arial", "B", 6.8)
-                pdf.write(3.1, f"{clean_for_pdf(key)}: ") 
+                pdf.write(3.4, f"{clean_for_pdf(key)}: ") # Mărit subtil line-height pentru lizibilitate
                 pdf.set_font("Arial", "I", 6.8)
                 v_str = clean_for_pdf(val)
-                pdf.write(3.1, v_str if len(v_str) < 28 else v_str[:25] + "...")    
-                pdf.ln(3.1)
+                pdf.write(3.4, v_str if len(v_str) < 28 else v_str[:25] + "...")    
+                pdf.ln(3.4)
             
-            # Preț Mărit
+            # Preț - Poziționat fix la bază, fără spațiu extra deasupra
             pdf.set_text_color(255, 0, 0)
-            pdf.set_y(current_y + label_height - 12.5)
+            pdf.set_y(current_y + label_height - 13.5) # Ridicat foarte puțin prețul
             pdf.set_x(current_x)
             pdf.set_font("Arial", "B", 17) 
-            pdf.cell(label_width, 8, txt=f"{prices[i]} lei", align='C')
+            pdf.cell(label_width, 9, txt=f"{prices[i]} lei", align='C')
             
-            # Cod
+            # Cod Consignație
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Arial", "", 5.5)
             pdf.set_y(current_y + label_height - 4.5)
@@ -125,11 +121,9 @@ else:
 
     for i, col in enumerate(cols):
         with col:
-            # 1. Brand (Apare mereu)
             brand_sel = st.selectbox(f"Brand {i+1}", ["-"] + sorted(df["Brand"].dropna().unique().tolist()), key=f"b_{i}")
             
-            # 2. Stocare și RAM (Apar imediat după Brand, înainte de Model sau preț)
-            st.write("**Specificații Memorie:**")
+            st.write("**Memorie:**")
             c_m1, c_m2 = st.columns(2)
             stoc_list = ["-", "2 GB", "4 GB", "8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
             ram_list = ["-", "1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB", "12 GB", "16 GB", "20 GB", "24 GB"]
@@ -137,10 +131,7 @@ else:
             r_val = c_m2.selectbox(f"RAM {i+1}", ram_list, key=f"ram_{i}")
             
             if brand_sel != "-":
-                # 3. Model
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
-                
-                # 4. Preț și restul
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
                 
                 cb1, cb2 = st.columns([2, 1])
@@ -162,10 +153,10 @@ else:
                     specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
                     
                     st.markdown(f"""
-                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 360px; margin: auto; font-family: Arial;">
-                        <h5 style="text-align:center; color: black; margin-bottom: 8px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
-                        <div style="font-size: 10.5px; color: #333; line-height: 1.2; height: 185px; overflow: hidden;">{specs_html}</div>
-                        <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 8px; padding-top: 5px;">
+                    <div style="border: 2px solid #FF0000; padding: 10px; border-radius: 5px; background: white; width: 220px; height: 350px; margin: auto; font-family: Arial;">
+                        <h5 style="text-align:center; color: black; margin-bottom: 5px; font-weight: bold; font-size: 15px; text-transform: uppercase;">{brand_sel} {model_sel}</h5>
+                        <div style="font-size: 10.8px; color: #333; line-height: 1.35; height: 200px; overflow: hidden;">{specs_html}</div>
+                        <div style="text-align: center; border-top: 1px solid #ff0000; margin-top: 5px; padding-top: 5px;">
                             <span style="font-size: 22px; color: #FF0000; font-weight: bold;">{u_price} lei</span>
                             <div style="font-size:8.5px; color: gray; margin-top: 2px;">B{b_digits}@{ag_val}</div>
                         </div>
