@@ -38,6 +38,7 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
             cap_bat_col = col
             break
 
+    # 1. Adăugăm restul specificațiilor (fără Baterie și Accesorii încă)
     for col in original_columns:
         if col in ["Brand", "Model"]: continue
         if col.lower() in ["sanatate baterie", "sănătate baterie", "baterie", "battery"]: continue
@@ -46,18 +47,21 @@ def get_specs_in_order(row_dict, original_columns, battery_override=None, access
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
             
-            if col == cap_bat_col:
-                if accessories_list:
-                    clean["Accesorii"] = ", ".join(accessories_list)
-                if battery_override:
-                    clean["Sănătate baterie"] = f"{battery_override}%"
+            # Inserăm Sănătate baterie imediat după Capacitate
+            if col == cap_bat_col and battery_override:
+                clean["Sănătate baterie"] = f"{battery_override}%"
 
+    # 2. Siguranță: dacă Sănătate Baterie nu e în listă, o adăugăm (de regulă prima)
     if battery_override and "Sănătate baterie" not in clean:
-        temp = {}
-        if accessories_list: temp["Accesorii"] = ", ".join(accessories_list)
-        temp["Sănătate baterie"] = f"{battery_override}%"
-        temp.update(clean)
-        return temp
+        new_clean = {"Sănătate baterie": f"{battery_override}%"}
+        new_clean.update(clean)
+        clean = new_clean
+
+    # 3. FORȚĂM ACCESORII SĂ FIE ULTIMA
+    if accessories_list:
+        # Dacă există deja în dicționar, o scoatem ca să o punem la final
+        clean.pop("Accesorii", None) 
+        clean["Accesorii"] = ", ".join(accessories_list)
         
     return clean
 
@@ -85,23 +89,28 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.multi_cell(label_width, 3.2, txt=clean_for_pdf(brand_model), align='C')
             
             pdf.set_y(current_y + 10.5)
+            # Luăm doar ultimele 10 dacă sunt prea multe, dar păstrăm ordinea
+            items = list(specs.items())
+            if len(items) > 10:
+                # Ne asigurăm că Accesoriile rămân în listă dacă sunt la final
+                display_items = items[:10]
+            else:
+                display_items = items
+
             lines_shown = 0
-            # Fontul rămâne generos, dar am optimizat spațierea pentru a permite 10 linii
             font_size_specs = 6.8
-            for key, val in specs.items():
-                if lines_shown < 10: # Limita crescută la 10 rânduri
-                    pdf.set_x(current_x + 2)
-                    pdf.set_font("Arial", "B", font_size_specs)
-                    pdf.write(3.2, f"{clean_for_pdf(key)}: ") 
-                    pdf.set_font("Arial", "I", font_size_specs)
-                    
-                    # Tăiem textul accesoriilor dacă e prea lung pentru un singur rând
-                    raw_val = clean_for_pdf(val)
-                    display_val = raw_val if len(raw_val) < 28 else raw_val[:25] + "..."
-                    
-                    pdf.write(3.2, display_val)    
-                    pdf.ln(3.2) # Spațiere optimizată
-                    lines_shown += 1
+            for key, val in display_items:
+                pdf.set_x(current_x + 2)
+                pdf.set_font("Arial", "B", font_size_specs)
+                pdf.write(3.2, f"{clean_for_pdf(key)}: ") 
+                pdf.set_font("Arial", "I", font_size_specs)
+                
+                raw_val = clean_for_pdf(val)
+                display_val = raw_val if len(raw_val) < 28 else raw_val[:25] + "..."
+                
+                pdf.write(3.2, display_val)    
+                pdf.ln(3.2)
+                lines_shown += 1
             
             pdf.set_text_color(255, 0, 0)
             pdf.set_y(current_y + label_height - 12)
@@ -124,7 +133,7 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
 
 # --- INTERFAȚĂ STREAMLIT ---
 st.set_page_config(page_title="Etichete 40x60 Pro", layout="wide")
-st.title("📱 Generator Etichete (10 Linii)")
+st.title("📱 Generator Etichete (Accesorii la final)")
 
 if df.empty:
     st.error("Eroare la baza de date.")
@@ -170,4 +179,4 @@ else:
     st.divider()
     if any(phones_to_export):
         pdf_out = create_pdf(phones_to_export, prices_to_export, codes_to_export, battery_to_export, acc_to_export, df.columns)
-        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_10_linii.pdf", mime="application/pdf")
+        st.download_button(label="🔴 DESCARCĂ PDF", data=pdf_out, file_name="etichete_final.pdf", mime="application/pdf")
