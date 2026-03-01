@@ -28,28 +28,36 @@ def clean_for_pdf(text):
 
 def get_specs_in_order(row_dict, original_columns, battery_override=None, accessories_list=None, stocare_val=None, ram_val=None):
     clean = {}
+    proc_found = False
     
-    # Adăugăm manual Stocare și RAM la început (după Brand/Model)
-    if stocare_val: clean["Stocare"] = stocare_val
-    if ram_val: clean["RAM"] = ram_val
-
-    cap_bat_col = None
-    for col in original_columns:
-        if "capacitate baterie" in col.lower():
-            cap_bat_col = col
-            break
-
-    # Adăugăm restul specificațiilor (sărind peste Stocare/RAM/Baterie din tabel)
+    # Coloane de ignorat din tabel (pentru că le punem manual sau sunt titluri)
     skip_cols = ["brand", "model", "stocare", "ram", "sanatate baterie", "sănătate baterie", "baterie", "battery", "storage"]
+
     for col in original_columns:
-        if col.lower() in skip_cols: continue
+        col_lower = col.lower()
+        if col_lower in skip_cols: continue
 
         val = row_dict.get(col)
         if pd.notnull(val) and str(val).strip() not in ["", "0", "nan", "None", "NaN"]:
             clean[col] = str(val).strip()
             
-            if col == cap_bat_col and battery_override:
+            # Verificăm dacă am adăugat procesorul pentru a insera Stocarea și RAM-ul după el
+            if "procesor" in col_lower:
+                if stocare_val: clean["Stocare"] = stocare_val
+                if ram_val: clean["RAM"] = ram_val
+                proc_found = True
+            
+            # Inserăm Sănătatea bateriei după Capacitate
+            if "capacitate baterie" in col_lower and battery_override:
                 clean["Sănătate baterie"] = f"{battery_override}%"
+
+    # Dacă nu a existat coloana "Procesor", punem Stocare/RAM la început
+    if not proc_found:
+        final_clean = {}
+        if stocare_val: final_clean["Stocare"] = stocare_val
+        if ram_val: final_clean["RAM"] = ram_val
+        final_clean.update(clean)
+        clean = final_clean
 
     if battery_override and "Sănătate baterie" not in clean:
         clean["Sănătate baterie"] = f"{battery_override}%"
@@ -81,7 +89,6 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             pdf.multi_cell(label_width, 3.2, txt=clean_for_pdf(brand_model), align='C')
             
             pdf.set_y(current_y + 10.5)
-            # Afișăm maxim 10 rânduri
             display_items = list(specs.items())[:10]
             for key, val in display_items:
                 pdf.set_x(current_x + 2)
@@ -122,17 +129,18 @@ else:
             if brand_sel != "-":
                 model_sel = st.selectbox(f"Model {i+1}", ["-"] + df[df["Brand"] == brand_sel]["Model"].dropna().tolist(), key=f"m_{i}")
                 
-                # --- NOILE CASETE PENTRU STOCARE ȘI RAM ---
-                c_mem1, c_mem2 = st.columns(2)
-                stoc_list = ["-", "2 GB", "4 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
+                # --- SELECTOARE STOCARE ȘI RAM (POZIȚIONATE ÎNAINTE DE RESTUL DATELOR) ---
+                st.write("**Specificații Memorie:**")
+                c_m1, c_m2 = st.columns(2)
+                stoc_list = ["-", "2 GB", "4 GB", "8 GB", "16 GB", "32 GB", "64 GB", "128 GB", "256 GB", "512 GB", "1 TB"]
                 ram_list = ["-", "1 GB", "2 GB", "3 GB", "4 GB", "6 GB", "8 GB", "12 GB", "16 GB", "20 GB", "24 GB"]
                 
-                selected_stocare = c_mem1.selectbox(f"Stocare {i+1}", stoc_list, key=f"stoc_{i}")
-                selected_ram = c_mem2.selectbox(f"RAM {i+1}", ram_list, key=f"ram_{i}")
+                s_val = c_m1.selectbox(f"Stocare {i+1}", stoc_list, key=f"stoc_{i}")
+                r_val = c_m2.selectbox(f"RAM {i+1}", ram_list, key=f"ram_{i}")
                 
                 u_price = st.number_input(f"Preț lei {i+1}", min_value=0, key=f"p_{i}")
                 
-                st.write("**Bon consignație:**")
+                st.write("**Detalii Adiționale:**")
                 cb1, cb2 = st.columns([2, 1])
                 b_digits = cb1.text_input("Cod B", value="32451", key=f"b_dig_{i}", label_visibility="collapsed")
                 ag_val = cb2.selectbox("AG", list(range(1, 56)), index=28, key=f"ag_val_{i}", label_visibility="collapsed")
@@ -146,8 +154,8 @@ else:
                 if model_sel != "-":
                     raw_specs = df[(df["Brand"] == brand_sel) & (df["Model"] == model_sel)].iloc[0].to_dict()
                     p_exp[i], pr_exp[i], c_exp[i], b_exp[i], a_exp[i] = raw_specs, u_price, f"B{b_digits}@{ag_val}", battery_percent, selected_acc
-                    s_exp[i] = selected_stocare if selected_stocare != "-" else None
-                    r_exp[i] = selected_ram if selected_ram != "-" else None
+                    s_exp[i] = s_val if s_val != "-" else None
+                    r_exp[i] = r_val if r_val != "-" else None
                     
                     ordered_specs = get_specs_in_order(raw_specs, df.columns, battery_percent, selected_acc, s_exp[i], r_exp[i])
                     specs_html = "".join([f"<b>{k}:</b> <i>{v}</i><br>" for k, v in list(ordered_specs.items())[:10]])
