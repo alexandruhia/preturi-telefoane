@@ -67,11 +67,11 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
     pdf.add_page()
     margin_left, gutter, label_width, label_height = 15, 5, 40, 60
     
-    logo_img = None
+    logo_img_content = None
     try:
         response = requests.get(LOGO_URL)
         if response.status_code == 200:
-            logo_img = BytesIO(response.content)
+            logo_img_content = response.content
     except:
         pass
 
@@ -108,6 +108,7 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
             
             # 3. Bloc Preț și Cod (Compact)
             end_specs_y = start_specs_y + (len(display_items) * line_step)
+            pdf.set_draw_color(255, 0, 0)
             pdf.line(current_x + 5, end_specs_y + 1, current_x + label_width - 5, end_specs_y + 1)
             
             pdf.set_text_color(255, 0, 0)
@@ -123,14 +124,13 @@ def create_pdf(selected_phones_list, prices, full_codes, battery_values, acc_val
 
             # 4. FRAME ROȘU (FOOTER) CU LOGO
             footer_h = 9.5
-            # Umplem fundalul cu roșu la baza etichetei
             pdf.set_fill_color(255, 0, 0)
             pdf.rect(current_x + 0.1, current_y + label_height - footer_h - 0.1, label_width - 0.2, footer_h, 'F')
             
-            if logo_img:
-                # Plasăm logo-ul peste banda roșie
-                # x centrat, y în banda de footer, w scalat la 32mm pentru vizibilitate
-                pdf.image(logo_img, x=current_x + 4, y=current_y + label_height - footer_h + 1.2, w=32)
+            if logo_img_content:
+                # Folosim BytesIO și specificăm type='PNG' pentru a evita eroarea de sistem
+                logo_stream = BytesIO(logo_img_content)
+                pdf.image(logo_stream, x=current_x + 4, y=current_y + label_height - footer_h + 1.2, w=32, type='PNG')
             
     return pdf.output(dest='S').encode('latin-1')
 
